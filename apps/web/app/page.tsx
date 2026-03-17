@@ -10,6 +10,7 @@ export default function HomePage() {
   
   const [liveMatches, setLiveMatches] = useState<any[]>([]);
   const [scheduledMatches, setScheduledMatches] = useState<any[]>([]);
+  const [completedMatches, setCompletedMatches] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
@@ -31,6 +32,7 @@ export default function HomePage() {
           const matches = data.matches || [];
           setLiveMatches(matches.filter((m: any) => m.status === 'live' || m.status === 'paused'));
           setScheduledMatches(matches.filter((m: any) => m.status === 'scheduled'));
+          setCompletedMatches(matches.filter((m: any) => m.status === 'finished').slice(-20).reverse());
           setIsLoading(false);
         });
     };
@@ -64,6 +66,7 @@ export default function HomePage() {
           <nav className="hidden md:flex items-center gap-6">
             <Link href="#live" className="text-zinc-300 hover:text-white font-medium transition-colors">Live Matches</Link>
             <Link href="#schedule" className="text-zinc-300 hover:text-white font-medium transition-colors">Upcoming</Link>
+            <Link href="#history" className="text-zinc-300 hover:text-white font-medium transition-colors">History</Link>
           </nav>
         </div>
         
@@ -149,14 +152,14 @@ export default function HomePage() {
                    <img
                      src={match.thumbnailUrl || "https://images.unsplash.com/photo-1628190715364-77218f2a9ccb?q=80&w=2070&auto=format&fit=crop"}
                      alt={match.title}
-                     className="w-full h-full object-cover opacity-30"
+                     className="w-full h-full object-cover opacity-100 transition-transform duration-[5s] scale-110 group-hover:scale-100"
                      onError={(e) => { (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1628190715364-77218f2a9ccb?q=80&w=2070&auto=format&fit=crop"; }}
                    />
                  </div>
                ))}
-               <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/60 to-transparent"></div>
-               <div className="absolute inset-0 bg-gradient-to-r from-zinc-950 via-zinc-950/80 to-transparent"></div>
-            </div>
+                 <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/40 to-transparent"></div>
+                 <div className="absolute inset-0 bg-gradient-to-r from-zinc-950 via-zinc-950/40 to-transparent"></div>
+              </div>
 
             {/* Content Container */}
             <div className="max-w-[1600px] w-full mx-auto px-4 md:px-8 relative z-10 flex flex-col justify-end h-full pb-16 md:pb-24">
@@ -165,27 +168,34 @@ export default function HomePage() {
                    key={match._id} 
                    className={`transition-all duration-700 ease-in-out absolute inset-0 max-w-[1600px] mx-auto px-4 md:px-8 flex flex-col justify-end pb-16 md:pb-24 ${idx === currentSlide ? 'opacity-100 translate-x-0 pointer-events-auto z-10' : 'opacity-0 translate-x-12 pointer-events-none z-0'}`}
                  >
-                   <div className="max-w-3xl">
-                     <div className={`inline-flex items-center gap-2 border px-3 py-1.5 rounded-full mb-6 max-w-fit ${match.status === 'live' ? 'bg-red-500/10 border-red-500/20' : 'bg-orange-500/10 border-orange-500/20'}`}>
-                       <div className={`w-2 h-2 rounded-full ${match.status === 'live' ? 'bg-red-500 animate-pulse' : 'bg-orange-500'}`}></div>
-                       <span className={`text-xs font-bold tracking-widest uppercase ${match.status === 'live' ? 'text-red-500' : 'text-orange-500'}`}>
-                         {match.status === 'live' ? 'Live Now' : 'Paused'}
-                       </span>
-                     </div>
-                     
-                      <h1 className="text-3xl md:text-6xl lg:text-7xl xl:text-8xl font-black text-white leading-tight md:leading-none tracking-tighter mb-4 drop-shadow-2xl">
-                        {match.playerA} <span className="text-zinc-600 font-medium px-1 md:px-2 text-xl md:text-4xl">vs</span> {match.playerB}
+                   <div className="max-w-4xl relative">
+                     <div className={`inline-flex items-center gap-2 border px-3 py-1.5 rounded-full mb-6 max-w-fit ${match.status === 'live' ? 'bg-red-500/10 border-red-500/20' : (match.status === 'finished' ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-orange-500/10 border-orange-500/20')}`}>
+                        <div className={`w-2 h-2 rounded-full ${match.status === 'live' ? 'bg-red-500 animate-pulse' : (match.status === 'finished' ? 'bg-emerald-500' : 'bg-orange-500')}`}></div>
+                        <span className={`text-xs font-bold tracking-widest uppercase ${match.status === 'live' ? 'text-red-500' : (match.status === 'finished' ? 'text-emerald-500' : 'text-orange-500')}`}>
+                          {match.status === 'live' ? 'Live Now' : (match.status === 'finished' ? 'Match Finished' : 'Paused')}
+                        </span>
+                      </div>
+                                            <h1 className="text-3xl md:text-6xl lg:text-7xl xl:text-8xl font-black text-white leading-tight md:leading-none tracking-tighter mb-4 drop-shadow-[0_4px_12px_rgba(0,0,0,1)]">
+                        {match.playerA} <span className="text-zinc-400 font-medium px-1 md:px-2 text-xl md:text-4xl">vs</span> {match.playerB}
+                        {match.status === 'finished' && match.winner && (
+                          <div className="mt-2 text-2xl md:text-4xl text-emerald-400 flex items-center gap-2 drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]">
+                             🏆 <span className="uppercase tracking-widest">{match.winner} WON</span>
+                          </div>
+                        )}
                       </h1>
-                      
-                      <div className="flex items-center gap-4 md:gap-6 mb-6 md:mb-8 text-lg md:text-2xl font-bold">
-                        <div className="flex items-baseline gap-2">
-                          <span className="text-white truncate max-w-[100px] md:max-w-[150px]">{match.playerA}</span>
-                          <span className="text-3xl md:text-5xl text-emerald-400">{match.scoreA || 0}</span>
+                                           <div className="flex items-center gap-4 md:gap-6 mb-6 md:mb-8 text-lg md:text-2xl font-bold">
+                        <div className="flex items-baseline gap-2 drop-shadow-[0_4px_8px_rgba(0,0,0,1)]">
+                          <span className={`truncate max-w-[100px] md:max-w-[150px] ${match.winner === match.playerA ? 'text-emerald-400' : 'text-white'}`}>{match.playerA}</span>
+                          <span className={`text-3xl md:text-5xl ${match.winner === match.playerA ? 'text-emerald-400' : 'text-zinc-200'}`}>
+                            {match.status === 'finished' ? (match.framesWonA || 0) : (match.scoreA || 0)}
+                          </span>
                         </div>
-                        <span className="text-zinc-700">-</span>
-                        <div className="flex items-baseline gap-2">
-                          <span className="text-3xl md:text-5xl text-zinc-400">{match.scoreB || 0}</span>
-                          <span className="text-zinc-400 truncate max-w-[100px] md:max-w-[150px]">{match.playerB}</span>
+                        <span className="text-zinc-400">-</span>
+                        <div className="flex items-baseline gap-2 drop-shadow-[0_4px_8px_rgba(0,0,0,1)]">
+                          <span className={`text-3xl md:text-5xl ${match.winner === match.playerB ? 'text-emerald-400' : 'text-zinc-200'}`}>
+                            {match.status === 'finished' ? (match.framesWonB || 0) : (match.scoreB || 0)}
+                          </span>
+                          <span className={`truncate max-w-[100px] md:max-w-[150px] ${match.winner === match.playerB ? 'text-emerald-400' : 'text-zinc-200'}`}>{match.playerB}</span>
                         </div>
                       </div>
                      
@@ -196,10 +206,14 @@ export default function HomePage() {
                         >
                           <Play fill="currentColor" size={18} /> Watch Now
                         </Link>
-                        <div className="flex items-center gap-2 md:gap-3 px-4 md:px-6 py-3 md:py-4 bg-zinc-900/80 backdrop-blur-sm border border-zinc-800 rounded-full text-zinc-300 font-medium capitalize w-fit text-sm md:text-base">
-                          <Activity size={18} className={match.status === 'live' ? 'text-emerald-500' : 'text-orange-500'} /> 
-                          <span className="hidden sm:inline">Frame {match.currentFrame || 1} • Target {match.framesToWin || Math.ceil(match.totalFrames / 2)}</span>
-                          <span className="sm:hidden">F{match.currentFrame || 1} • T{match.framesToWin || Math.ceil(match.totalFrames / 2)}</span>
+                        <div className="flex items-center gap-2 md:gap-3 px-4 md:px-6 py-3 md:py-4 bg-black/40 border border-white/5 rounded-full text-white font-medium capitalize w-fit text-sm md:text-base">
+                          <Activity size={18} className={match.status === 'live' ? 'text-emerald-500' : (match.status === 'finished' ? 'text-emerald-500' : 'text-orange-500')} /> 
+                          <span className="hidden sm:inline">
+                             {match.status === 'finished' ? `Final Match Score: ${match.framesWonA}-${match.framesWonB}` : `Frame ${match.currentFrame || 1} • Target ${match.framesToWin || Math.ceil(match.totalFrames / 2)}`}
+                          </span>
+                          <span className="sm:hidden">
+                             {match.status === 'finished' ? `Final: ${match.framesWonA}-${match.framesWonB}` : `F${match.currentFrame || 1} • T${match.framesToWin || Math.ceil(match.totalFrames / 2)}`}
+                          </span>
                         </div>
                       </div>
                    </div>
@@ -281,23 +295,44 @@ export default function HomePage() {
         <section id="schedule" className="scroll-mt-24">
            <h2 className="text-2xl font-bold text-white mb-8 border-b border-zinc-800 pb-4 flex items-center gap-3">
              <CalendarDays className="text-blue-500" />
-             Scheduled Matches <span className="text-zinc-500 text-base font-medium ml-2">({filteredScheduledMatches.length})</span>
+             Upcoming Matches <span className="text-zinc-500 text-base font-medium ml-2">({filteredScheduledMatches.length})</span>
            </h2>
            
            {!isLoading && filteredScheduledMatches.length === 0 ? (
              <div className="p-8 border border-zinc-800 rounded-2xl bg-zinc-900/30 text-center">
                <CalendarDays className="mx-auto text-zinc-700 mb-4" size={48} />
-               <h3 className="text-xl font-bold text-white mb-2">{searchQuery ? 'No matching scheduled matches' : 'No upcoming matches'}</h3>
-               <p className="text-zinc-500">{searchQuery ? 'Try a different search term.' : 'The schedule is currently clear. Admins will add new matches soon.'}</p>
+               <h3 className="text-xl font-bold text-white mb-2">{searchQuery ? 'No matching upcoming matches' : 'No upcoming matches scheduled'}</h3>
+               <p className="text-zinc-500">{searchQuery ? 'Try a different search term.' : 'Stay tuned for future events and match announcements.'}</p>
              </div>
            ) : (
              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-               {filteredScheduledMatches.map((match: any) => (
+               {filteredScheduledMatches.map(match => (
                  <MatchCard key={match._id} match={match} />
                ))}
              </div>
            )}
          </section>
+
+         <section id="history" className="scroll-mt-24">
+            <h2 className="text-2xl font-bold text-white mb-8 border-b border-zinc-800 pb-4 flex items-center gap-3">
+              <Activity className="text-zinc-500" />
+              Completed Matches <span className="text-zinc-500 text-base font-medium ml-2">(Last 20)</span>
+            </h2>
+            
+            {!isLoading && completedMatches.length === 0 ? (
+              <div className="p-8 border border-zinc-800 rounded-2xl bg-zinc-900/30 text-center">
+                <Activity className="mx-auto text-zinc-700 mb-4" size={48} />
+                <h3 className="text-xl font-bold text-white mb-2">No completed matches yet</h3>
+                <p className="text-zinc-500">History will appear here once matches are finished.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {completedMatches.map((match: any) => (
+                  <MatchCard key={match._id} match={match} />
+                ))}
+              </div>
+            )}
+          </section>
 
       </main>
     </div>
@@ -305,60 +340,72 @@ export default function HomePage() {
 }function MatchCard({ match }: { match: any }) {
   const isScheduled = match.status === 'scheduled';
   return (
-    <Link href={`/watch/${match._id}`} className="bg-[#121214] border border-zinc-800 rounded-2xl overflow-hidden hover:border-zinc-600 transition-colors group flex flex-col justify-between h-full">
-       {/* Thumbnail Image */}
-       {match.thumbnailUrl ? (
-         <div className="relative w-full h-36 overflow-hidden flex-shrink-0">
-           <img
-             src={match.thumbnailUrl}
-             alt={match.title}
-             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-           />
-           <div className="absolute inset-0 bg-gradient-to-t from-[#121214] to-transparent" />
-           {/* Status badge overlaid on the image */}
-           <span className={`absolute top-3 left-3 text-[10px] font-bold tracking-widest px-2 py-0.5 rounded border ${
-             isScheduled ? 'text-blue-400 bg-blue-500/20 border-blue-500/30 backdrop-blur-sm' :
-             (match.status === 'live' ? 'text-red-400 bg-red-500/20 border-red-500/30 backdrop-blur-sm' :
-             'text-orange-400 bg-orange-500/20 border-orange-500/30 backdrop-blur-sm')
-           }`}>
-             {match.status.toUpperCase()}
-           </span>
-         </div>
-       ) : null}
+    <Link href={`/watch/${match._id}`} className="bg-[#121214] border border-zinc-800 rounded-2xl overflow-hidden hover:border-zinc-600 transition-colors group flex flex-col justify-start h-full">
+       {/* ALWAYS AT THE TOP: Status Header */}
+       <div className="p-5 pb-0">
+          <div className="flex justify-between items-start mb-4">
+            <span className={`text-[10px] font-bold tracking-widest px-2 py-0.5 rounded border ${
+              isScheduled ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' : 
+              (match.status === 'live' ? 'text-red-400 bg-red-500/10 border-red-500/20' : 
+              (match.status === 'finished' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-orange-400 bg-orange-500/10 border-orange-500/20'))
+            }`}>
+              {match.status.toUpperCase()}
+            </span>
+            <span className="text-[10px] text-zinc-500 font-medium uppercase">
+               {match.status === 'finished' ? `Final Score (${match.framesWonA}-${match.framesWonB})` : (isScheduled ? new Date(match.scheduledTime).toLocaleDateString() : `Frame ${match.currentFrame || 1}`)}
+            </span>
+          </div>
+       </div>
 
-       <div className="p-5 flex flex-col flex-1">
-         {!match.thumbnailUrl && (
-           <div className="flex justify-between items-start mb-6">
-             <span className={`text-[10px] font-bold tracking-widest px-2 py-0.5 rounded border ${isScheduled ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' : (match.status === 'live' ? 'text-red-400 bg-red-500/10 border-red-500/20' : 'text-orange-400 bg-orange-500/10 border-orange-500/20')}`}>
-               {match.status.toUpperCase()}
-             </span>
-             <span className="text-[10px] text-zinc-500 font-medium uppercase">{isScheduled ? new Date(match.scheduledTime).toLocaleDateString() : `Frame ${match.currentFrame || 1}`}</span>
+       {/* Consistent Placeholder or Thumbnail Area */}
+       <div className="relative w-full h-36 overflow-hidden flex-shrink-0 mb-2 bg-zinc-900/50">
+         {match.thumbnailUrl ? (
+           <>
+             <img
+               src={match.thumbnailUrl}
+               alt={match.title}
+               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+             />
+             <div className="absolute inset-0 bg-gradient-to-t from-[#121214] to-transparent" />
+           </>
+         ) : (
+           <div className="w-full h-full flex items-center justify-center">
+              <Activity className="text-zinc-800" size={48} />
            </div>
          )}
-         {match.thumbnailUrl && (
-           <div className="flex justify-end mb-2">
-             <span className="text-[10px] text-zinc-500 font-medium uppercase">{isScheduled ? new Date(match.scheduledTime).toLocaleDateString() : `Frame ${match.currentFrame || 1}`}</span>
-           </div>
-         )}
+       </div>
 
-         <div className="space-y-3 mb-6 flex-1 flex flex-col justify-center">
-           <div className="flex justify-between items-center">
-              <span className="font-bold text-white truncate max-w-[150px]">{match.playerA}</span>
-              {!isScheduled && <span className="font-black text-xl text-emerald-400">{match.scoreA || 0}</span>}
-           </div>
-           <div className="flex justify-between items-center">
-              <span className="font-bold text-zinc-400 truncate max-w-[150px]">{match.playerB}</span>
-              {!isScheduled && <span className="font-black text-xl text-zinc-500">{match.scoreB || 0}</span>}
-           </div>
-         </div>
+       <div className="p-5 pt-0 flex flex-col flex-1">
+          <div className="space-y-3 mb-6 flex-1 flex flex-col justify-center">
+            <div className="flex justify-between items-center text-lg">
+               <span className={`font-bold truncate max-w-[150px] ${
+                 (match.winner === match.playerA || (match.status === 'finished' && match.framesWonA > match.framesWonB)) ? 'text-emerald-400' : 'text-white'
+               }`}>
+                 {match.playerA} {(match.winner === match.playerA || (match.status === 'finished' && match.framesWonA > match.framesWonB)) && '🏆'}
+               </span>
+               {!isScheduled && <span className={`font-black ${
+                 (match.winner === match.playerA || (match.status === 'finished' && match.framesWonA > match.framesWonB)) ? 'text-emerald-400' : 'text-zinc-500'
+               }`}>{match.framesWonA || 0}</span>}
+            </div>
+            <div className="flex justify-between items-center text-lg">
+               <span className={`font-bold truncate max-w-[150px] ${
+                 (match.winner === match.playerB || (match.status === 'finished' && match.framesWonB > match.framesWonA)) ? 'text-emerald-400' : 'text-zinc-400'
+               }`}>
+                 {match.playerB} {(match.winner === match.playerB || (match.status === 'finished' && match.framesWonB > match.framesWonA)) && '🏆'}
+               </span>
+               {!isScheduled && <span className={`font-black ${
+                 (match.winner === match.playerB || (match.status === 'finished' && match.framesWonB > match.framesWonA)) ? 'text-emerald-400' : 'text-zinc-500'
+               }`}>{match.framesWonB || 0}</span>}
+            </div>
+          </div>
 
          {isScheduled && (
-           <div className="mt-auto pt-4 border-t border-zinc-800 text-xs text-zinc-500 flex justify-between items-center">
-             <span>{new Date(match.scheduledTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-             <span className="flex items-center gap-1"><Play size={12} className="text-blue-500 group-hover:text-blue-400"/>View</span>
-           </div>
-         )}
+            <div className="mt-auto pt-4 border-t border-zinc-800 text-xs text-zinc-500 flex justify-between items-center">
+              <span>{new Date(match.scheduledTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              <span className="flex items-center gap-1"><Play size={12} className="text-blue-500 group-hover:text-blue-400"/>View</span>
+            </div>
+          )}
        </div>
     </Link>
   );

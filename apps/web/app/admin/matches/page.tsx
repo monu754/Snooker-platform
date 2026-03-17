@@ -53,7 +53,8 @@ export default function MatchManagerPage() {
   const getStatusWeight = (status: string) => {
     if (status === 'live') return 1;
     if (status === 'paused') return 2;
-    return 3; // scheduled or finished
+    if (status === 'scheduled') return 3;
+    return 4; // finished
   };
 
   const filteredMatches = matches
@@ -110,6 +111,7 @@ export default function MatchManagerPage() {
                 <th className="px-6 py-4 font-semibold">Format</th>
                 <th className="px-6 py-4 font-semibold">Status</th>
                 <th className="px-6 py-4 font-semibold">Date / Time</th>
+                <th className="px-6 py-4 font-semibold">Winner</th>
                 <th className="px-6 py-4 font-semibold text-right">Actions</th>
               </tr>
             </thead>
@@ -137,6 +139,19 @@ export default function MatchManagerPage() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-zinc-400">{new Date(match.scheduledTime).toLocaleString()}</td>
+                    <td className="px-6 py-4">
+                      {match.winner ? (
+                        <span className="text-emerald-400 font-bold">{match.winner}</span>
+                      ) : (
+                        match.status === 'finished' ? (
+                          <span className="text-zinc-400 font-medium">
+                            {match.framesWonA > match.framesWonB ? match.playerA : (match.framesWonB > match.framesWonA ? match.playerB : "Draw")}
+                          </span>
+                        ) : (
+                          <span className="text-zinc-600">—</span>
+                        )
+                      )}
+                    </td>
                     <td className="px-6 py-4">
                       <div className="flex justify-end gap-2">
                          {match.status === 'live' && (

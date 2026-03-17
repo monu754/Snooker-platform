@@ -22,6 +22,7 @@ export interface IMatch extends Document {
   framesWonA: number;
   framesWonB: number;
   currentFrame: number;
+  winner?: string;
 }
 
 const MatchSchema: Schema = new Schema(
@@ -47,6 +48,7 @@ const MatchSchema: Schema = new Schema(
     framesWonA: { type: Number, default: 0 },
     framesWonB: { type: Number, default: 0 },
     currentFrame: { type: Number, default: 1 },
+    winner: { type: String },
   },
   { timestamps: true }
 );

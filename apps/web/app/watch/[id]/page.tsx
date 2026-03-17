@@ -104,6 +104,12 @@ export default function WatchPage() {
       if (data.streamUrl !== undefined) setStreamUrl(data.streamUrl || null);
       // Update active player highlight
       if (data.activePlayer !== undefined) setActivePlayer(data.activePlayer);
+      
+      // Update match object for framesWon, status, and winner
+      setMatch((prev: any) => ({
+        ...prev,
+        ...data
+      }));
     });
 
     channel.bind("new-event", (data: EventLog) => {
@@ -210,8 +216,13 @@ export default function WatchPage() {
                   </div>
                 </div>
                 <div className={`text-4xl md:text-5xl font-black tracking-tighter w-16 md:w-20 text-right ${
-                  match?.status === 'live' && activePlayer === 'A' ? 'text-emerald-400' : 'text-white'
-                }`}>{scoreA}</div>
+                  match?.winner === match?.playerA ? 'text-emerald-400' : (match?.status === 'live' && activePlayer === 'A' ? 'text-emerald-400' : 'text-white')
+                }`}>
+                  {match?.status === 'finished' ? (match.framesWonA || 0) : scoreA}
+                </div>
+                {match?.status === 'finished' && match?.winner === match?.playerA && (
+                  <Trophy className="text-emerald-500 ml-2 animate-bounce" size={24} />
+                )}
               </div>
 
               <div className="flex flex-row md:flex-col items-center justify-center px-4 flex-shrink-0">
@@ -240,8 +251,13 @@ export default function WatchPage() {
                   </div>
                 </div>
                 <div className={`text-4xl md:text-5xl font-black tracking-tighter w-16 md:w-20 text-left md:mr-auto ${
-                  match?.status === 'live' && activePlayer === 'B' ? 'text-emerald-400' : 'text-zinc-500'
-                }`}>{scoreB}</div>
+                  match?.winner === match?.playerB ? 'text-emerald-400' : (match?.status === 'live' && activePlayer === 'B' ? 'text-emerald-400' : 'text-zinc-500')
+                }`}>
+                   {match?.status === 'finished' ? (match.framesWonB || 0) : scoreB}
+                </div>
+                {match?.status === 'finished' && match?.winner === match?.playerB && (
+                  <Trophy className="text-emerald-500 mr-2 animate-bounce transition-all" size={24} />
+                )}
               </div>
             </div>
           </div>

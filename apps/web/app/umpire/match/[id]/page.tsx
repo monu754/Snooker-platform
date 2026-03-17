@@ -186,17 +186,45 @@ export default function UmpireScoringPage() {
       setFramesWonB(newFramesB);
       const ev = logEvent(winner, "Won Frame", `${scoreA} - ${scoreB}`, "system");
       
-      setScoreA(0);
-      setScoreB(0);
-      setBreakScore(0);
-      setFrame(newFrameNum);
+      // Check for match winner (Auto-Conclude)
+      const framesToWin = match.framesToWin || Math.ceil(match.totalFrames / 2);
+      const matchWinner = newFramesA >= framesToWin ? "A" : (newFramesB >= framesToWin ? "B" : null);
 
-      await syncToDatabase({ scoreA: 0, scoreB: 0, framesWonA: newFramesA, framesWonB: newFramesB, currentFrame: newFrameNum }, ev);
+      if (matchWinner) {
+        setMatchStatus("finished");
+        setScoreA(0);
+        setScoreB(0);
+        setBreakScore(0);
+        const winnerName = matchWinner === "A" ? match.playerA : match.playerB;
+        const finalEv = logEvent(matchWinner, "Won Match", `Final Score: ${newFramesA} - ${newFramesB}`, "system");
+        await syncToDatabase({ 
+          scoreA: 0, 
+          scoreB: 0, 
+          framesWonA: newFramesA, 
+          framesWonB: newFramesB, 
+          status: "finished",
+          winner: winnerName
+        }, finalEv);
+        alert(`Match Concluded! Winner: ${winnerName}`);
+      } else {
+        setScoreA(0);
+        setScoreB(0);
+        setBreakScore(0);
+        setFrame(newFrameNum);
+        await syncToDatabase({ scoreA: 0, scoreB: 0, framesWonA: newFramesA, framesWonB: newFramesB, currentFrame: newFrameNum }, ev);
+      }
     }
   };
 
   const logEvent = (player: Player, action: string, points: string, type: "score" | "foul" | "system") => {
-    const newEvent: EventLog = { id: Date.now().toString(), time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), player, action, points, type };
+    const newEvent: EventLog = { 
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, 
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 
+      player, 
+      action, 
+      points, 
+      type 
+    };
     setEvents(prev => [newEvent, ...prev]);
     return newEvent;
   };
@@ -205,9 +233,17 @@ export default function UmpireScoringPage() {
     if (action === "finished" && !window.confirm("CRITICAL: Are you sure you want to END the entire match?")) return;
     
     setMatchStatus(action);
-    const ev = logEvent("A", `Match ${action.toUpperCase()}`, "-", "system");
+    const updates: any = { status: action };
+    
+    if (action === "finished") {
+      // Determine winner based on current frames won
+      if (framesWonA > framesWonB) updates.winner = match.playerA;
+      else if (framesWonB > framesWonA) updates.winner = match.playerB;
+      else updates.winner = "Draw"; // Or logic for decider
+    }
 
-    await syncToDatabase({ status: action }, ev);
+    const ev = logEvent("A", `Match ${action.toUpperCase()}`, "-", "system");
+    await syncToDatabase(updates, ev);
   };
 
   if (isLoading) return <div className="min-h-screen flex items-center justify-center"><Activity className="animate-spin text-emerald-500" size={32} /></div>;
