@@ -66,41 +66,68 @@ snooker-platform/
 
 ## ⚙️ Setup & Installation
 
-### 1. Prerequisites
-- Node.js (>= 18)
-- pnpm (Recommended)
-- MongoDB instance (Local or Atlas)
-- Pusher account for real-time features
+Follow these steps to set up the project on a new device.
 
-### 2. Clone and Install
+### 1. Prerequisites
+
+Before you begin, ensure you have the following installed:
+- **Git**: [Download and Install Git](https://git-scm.com/downloads)
+- **Node.js**: (Version 18 or higher) [Download Node.js](https://nodejs.org/)
+- **pnpm**: We use `pnpm` for package management. Install it globally via npm:
+  ```bash
+  npm install -g pnpm
+  ```
+- **MongoDB**: You need a running MongoDB instance.
+  - **Local**: [Download MongoDB Community Server](https://www.mongodb.com/try/download/community)
+  - **Cloud**: [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) (Free tier available)
+- **Pusher Account**: Required for real-time scoring. Create a free account at [Pusher](https://pusher.com/).
+
+### 2. Clone the Repository
+
+Open your terminal and run:
 ```bash
 git clone https://github.com/monu754/Snooker-platform.git
 cd snooker-platform
+```
+
+### 3. Install Dependencies
+
+Install all required packages using `pnpm`:
+```bash
 pnpm install
 ```
 
-### 3. Environment Variables
-Create an `apps/web/.env.local` file with the following variables:
+### 4. Configuration (Environment Variables)
+
+The application requires several environment variables to function correctly.
+
+1. Navigate to the web app directory:
+   ```bash
+   cd apps/web
+   ```
+2. Create a file named `.env.local`:
+   ```bash
+   cp .env.example .env.local  # If .env.example exists, otherwise create new
+   ```
+3. Open `apps/web/.env.local` and fill in your credentials:
 
 ```env
-# Database
+# Database Connection
 MONGODB_URI=mongodb://localhost:27017/snooker-platform
+# OR Atlas: MONGODB_URI=mongodb+srv://<username>:<password>@cluster0.mongodb.net/snooker_platform
 
-# NextAuth
+# NextAuth Configuration
+# Generate a secret: openssl rand -base64 32
 NEXTAUTH_URL=http://localhost:3000
-NEXTAUTH_SECRET=your_random_secret_here
+NEXTAUTH_SECRET=your_secret_here
 
-# Pusher (For Real-time)
+# Pusher Configuration (Get these from your Pusher Dashboard)
 PUSHER_APP_ID=your_app_id
 NEXT_PUBLIC_PUSHER_KEY=your_public_key
 PUSHER_SECRET=your_secret
 NEXT_PUBLIC_PUSHER_CLUSTER=your_cluster
 
-# Google OAuth (Optional)
-GOOGLE_CLIENT_ID=your_id
-GOOGLE_CLIENT_SECRET=your_secret
-
-# Email Notifications (SMTP)
+# Email Notifications (SMTP - e.g., Gmail)
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USER=your_email@gmail.com
@@ -109,11 +136,15 @@ SMTP_FROM="Snooker Platform" <your_email@gmail.com>
 SMTP_SECURE=false
 ```
 
-### 4. Run Locally
+### 5. Start Developing
+
+Go back to the root directory and start the development server:
 ```bash
+cd ../..
 pnpm dev
 ```
-Open [http://localhost:3000](http://localhost:3000) to see the result.
+
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## 🗃 Database Schema
 
