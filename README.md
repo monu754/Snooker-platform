@@ -27,6 +27,11 @@ Snooker Stream is a comprehensive solution for managing snooker tournaments, fro
 - **Real-time Sync**: Watch scores and events update instantly without refresh.
 - **Winner Highlights**: Visual distinction for match winners with trophy icons.
 
+### 📢 Platform Announcements
+- **Global Banner**: Admins can broadcast real-time messages to all active users.
+- **Real-time Sync**: Instant appearance and updates powered by Pusher.
+- **Dismissible UI**: Clean, high-contrast banner that users can opt to hide locally.
+
 ## 🛠 Tech Stack
 
 - **Framework**: [Next.js 16 (App Router)](https://nextjs.org/)

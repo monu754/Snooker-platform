@@ -55,6 +55,22 @@ export async function PATCH(req: Request) {
        settings = await Settings.findOneAndUpdate({}, { $set: updates }, { new: true });
     }
 
+    // Trigger pusher update
+    const { default: Pusher } = await import("pusher");
+    const pusher = new Pusher({
+      appId: process.env.PUSHER_APP_ID!,
+      key: process.env.NEXT_PUBLIC_PUSHER_KEY!,
+      secret: process.env.PUSHER_SECRET!,
+      cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER!,
+      useTLS: true,
+    });
+
+    await pusher.trigger("platform-settings", "settings-updated", {
+      maintenanceMode: settings.maintenanceMode,
+      globalAnnouncement: settings.globalAnnouncement,
+      allowRegistration: settings.allowRegistration,
+    });
+
     return NextResponse.json({ success: true, settings });
   } catch (error: any) {
     console.error("Error updating settings:", error);
