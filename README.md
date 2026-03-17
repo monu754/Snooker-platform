@@ -42,9 +42,24 @@ git clone https://github.com/monu754/snooker-platform.git
 pnpm install
 
 # Set up environment variables (.env.local in apps/web)
-MONGODB_URI=...
-NEXTAUTH_SECRET=...
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+# NextAuth requires a URL and a Secret
+NEXTAUTH_URL=http://localhost:3000
+# You can generate a random secret string by running `openssl rand -base64 32` in your terminal, or just type a long random string of characters here for now.
+NEXTAUTH_SECRET=my_super_secret_snooker_key_123!
+
+# Add this to your existing .env.local file
+MONGODB_URI=mongodb://127.0.0.1:27017/snooker-platform
+# OR Atlas: MONGODB_URI=mongodb+srv://<username>:<password>@cluster0.mongodb.net/snooker_platform
+
+
+# Add these below your MongoDB and NextAuth variables
 PUSHER_APP_ID=...
+NEXT_PUBLIC_PUSHER_KEY=...
+PUSHER_SECRET=...
+NEXT_PUBLIC_PUSHER_CLUSTER=...
+
 # etc.
 
 # Run the development server
