@@ -9,6 +9,7 @@ export default function RegisterUmpirePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   
   const [formData, setFormData] = useState({ name: "", email: "", password: "" }); // <-- Added password
 
@@ -16,6 +17,7 @@ export default function RegisterUmpirePage() {
     e.preventDefault();
     setLoading(true);
     setError("");
+    setSuccess("");
 
     try {
       const res = await fetch("/api/admin/umpires", {
@@ -27,8 +29,20 @@ export default function RegisterUmpirePage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to register umpire");
 
-      router.push("/admin/umpires");
-      router.refresh();
+      let successMsg = "Umpire registered successfully!";
+      if (data.mailSent) {
+        successMsg += " Confirmation email sent.";
+      } else if (data.mailSent === false) {
+        successMsg += ` (Note: Email failed to send: ${data.mailError})`;
+      }
+      
+      setSuccess(successMsg);
+      
+      // Delay redirect to allow the user to see the success message
+      setTimeout(() => {
+        router.push("/admin/umpires");
+        router.refresh();
+      }, 2000);
       
     } catch (err: any) {
       setError(err.message);
@@ -50,6 +64,12 @@ export default function RegisterUmpirePage() {
         {error && (
           <div className="bg-red-500/10 border border-red-500/20 text-red-500 p-4 rounded-lg mb-6 text-sm">
             {error}
+          </div>
+        )}
+
+        {success && (
+          <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 p-4 rounded-lg mb-6 text-sm">
+            {success}
           </div>
         )}
 

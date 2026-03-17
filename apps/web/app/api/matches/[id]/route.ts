@@ -85,19 +85,31 @@ export async function PATCH(req: Request, props: { params: Promise<{ id: string 
     }
 
     // If an umpire update was provided, send them an email
+    let mailSent = false;
+    let mailError = null;
+
     if (matchUpdates.umpireId) {
        const umpire = await User.findById(matchUpdates.umpireId).lean();
        if (umpire && (umpire as any).email) {
-          await sendMatchAssignmentEmail(
+          const mailResult = await sendMatchAssignmentEmail(
             (umpire as any).email, 
             (umpire as any).name, 
             updatedMatch.title, 
             updatedMatch.scheduledTime
           );
+          mailSent = mailResult.success;
+          if (!mailResult.success) {
+            mailError = (mailResult.error as any)?.message || "Failed to send email";
+          }
        }
     }
 
-    return NextResponse.json({ success: true, match: updatedMatch }, { status: 200 });
+    return NextResponse.json({ 
+      success: true, 
+      match: updatedMatch,
+      mailSent,
+      mailError
+    }, { status: 200 });
   } catch (error) {
     console.error("Match Update Error:", error);
     return NextResponse.json({ error: "Server Error" }, { status: 500 });

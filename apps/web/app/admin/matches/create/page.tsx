@@ -72,10 +72,13 @@ export default function CreateMatchPage() {
 
   const activeFormat = FORMATS[formData.format];
 
+  const [success, setSuccess] = useState("");
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
+    setSuccess("");
 
     try {
       const scheduledDateTime = new Date(`${formData.date}T${formData.time}`).toISOString();
@@ -101,8 +104,21 @@ export default function CreateMatchPage() {
 
       if (!res.ok) throw new Error(data.error || "Failed to create match");
 
-      router.push("/admin/matches");
-      router.refresh();
+      let successMsg = "Match created successfully!";
+      if (formData.umpireId) {
+        if (data.mailSent) {
+          successMsg += " Assignment email sent to umpire.";
+        } else if (data.mailSent === false) {
+          successMsg += ` (Note: Umpire email failed: ${data.mailError})`;
+        }
+      }
+
+      setSuccess(successMsg);
+
+      setTimeout(() => {
+        router.push("/admin/matches");
+        router.refresh();
+      }, 2000);
       
     } catch (err: any) {
       setError(err.message);
@@ -124,6 +140,12 @@ export default function CreateMatchPage() {
         {error && (
           <div className="bg-red-500/10 border border-red-500/20 text-red-500 p-4 rounded-lg mb-6 text-sm">
             {error}
+          </div>
+        )}
+
+        {success && (
+          <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 p-4 rounded-lg mb-6 text-sm">
+            {success}
           </div>
         )}
 

@@ -48,7 +48,7 @@ export async function POST(req: Request) {
 
     // Send welcome email with credentials
     // We pass the raw password here BEFORE returning it encoded or hashed in response (though it's hashed in DB)
-    await sendUmpireWelcomeEmail(email, name, password);
+    const mailResult = await sendUmpireWelcomeEmail(email, name, password);
 
     // SAFETY NET: Wrap the event logger in a try/catch. 
     // If it fails (e.g., missing matchId), it won't crash the umpire creation!
@@ -65,7 +65,12 @@ export async function POST(req: Request) {
       console.warn("Non-fatal: Could not log event to dashboard (likely missing matchId).", eventError);
     }
 
-    return NextResponse.json({ success: true, umpire: newUmpire }, { status: 201 });
+    return NextResponse.json({ 
+      success: true, 
+      umpire: newUmpire,
+      mailSent: mailResult.success,
+      mailError: mailResult.error ? (mailResult.error as any).message : null
+    }, { status: 201 });
 
   } catch (error: any) {
     console.error("Umpire Creation Error:", error);

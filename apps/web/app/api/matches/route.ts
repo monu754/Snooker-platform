@@ -79,14 +79,26 @@ export async function POST(req: Request) {
     });
 
     // 3. If an umpire was assigned, send them an email
+    let mailSent = false;
+    let mailError = null;
+
     if (umpireId) {
       const umpire = await User.findById(umpireId).lean();
       if (umpire && (umpire as any).email) {
-        await sendMatchAssignmentEmail((umpire as any).email, (umpire as any).name, title, scheduledTime);
+        const mailResult = await sendMatchAssignmentEmail((umpire as any).email, (umpire as any).name, title, scheduledTime);
+        mailSent = mailResult.success;
+        if (!mailResult.success) {
+          mailError = (mailResult.error as any)?.message || "Failed to send email";
+        }
       }
     }
 
-    return NextResponse.json({ success: true, match: newMatch }, { status: 201 });
+    return NextResponse.json({ 
+      success: true, 
+      match: newMatch,
+      mailSent,
+      mailError
+    }, { status: 201 });
 
   } catch (error: any) {
     console.error("Match Creation Error:", error);
