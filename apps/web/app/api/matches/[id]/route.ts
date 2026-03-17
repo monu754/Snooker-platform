@@ -7,6 +7,8 @@ import Event from "../../../../lib/models/Event";
 import { pusherServer } from "../../../../lib/pusher";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../../../lib/auth";
+import User from "../../../../lib/models/User";
+import { sendMatchAssignmentEmail } from "../../../../lib/mail";
 
 export async function GET(req: Request, props: { params: Promise<{ id: string }> }) {
   try {
@@ -82,6 +84,19 @@ export async function PATCH(req: Request, props: { params: Promise<{ id: string 
       });
     }
 
+    // If an umpire update was provided, send them an email
+    if (matchUpdates.umpireId) {
+       const umpire = await User.findById(matchUpdates.umpireId).lean();
+       if (umpire && (umpire as any).email) {
+          await sendMatchAssignmentEmail(
+            (umpire as any).email, 
+            (umpire as any).name, 
+            updatedMatch.title, 
+            updatedMatch.scheduledTime
+          );
+       }
+    }
+
     return NextResponse.json({ success: true, match: updatedMatch }, { status: 200 });
   } catch (error) {
     console.error("Match Update Error:", error);
@@ -99,6 +114,17 @@ export async function DELETE(req: Request, props: { params: Promise<{ id: string
     await dbConnect();
     const params = await props.params;
     await Match.findByIdAndDelete(params.id);
+
+    // Log the deletion to System Events
+    await Event.create({
+      player: "System",
+      eventType: "match_deleted",
+      points: 0,
+      description: `Match Deleted (ID: ${params.id}) by Admin`,
+      category: "admin",
+      frameNumber: 0
+    });
+
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (error) {
     return NextResponse.json({ error: "Server Error" }, { status: 500 });

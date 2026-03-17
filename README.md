@@ -14,6 +14,11 @@ Snooker Stream is a comprehensive solution for managing snooker tournaments, fro
 - **Player & User Management**: Control access levels and player profiles.
 - **Real-time Overview**: Monitor all active frames and scores.
 - **Match History**: Track past results with automated winner determination.
+- **Refined Activity Feed**: High-level administrative audit log (Logins, Match Deletions, User Updates) filtered specifically for admins.
+
+### 📧 Automated Notifications
+- **Umpire Welcome**: New umpires automatically receive an email with their login credentials and mandatory password change instructions.
+- **Match Assignment**: Umpires are instantly notified via email when assigned to a new or existing match.
 
 ### ⚖️ Umpire Scoring Panel
 - **Point Tracking**: Simple, intuitive point buttons.
@@ -94,6 +99,14 @@ NEXT_PUBLIC_PUSHER_CLUSTER=your_cluster
 # Google OAuth (Optional)
 GOOGLE_CLIENT_ID=your_id
 GOOGLE_CLIENT_SECRET=your_secret
+
+# Email Notifications (SMTP)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your_email@gmail.com
+SMTP_PASS=your_app_password
+SMTP_FROM="Snooker Platform" <your_email@gmail.com>
+SMTP_SECURE=false
 ```
 
 ### 4. Run Locally
@@ -107,7 +120,7 @@ Open [http://localhost:3000](http://localhost:3000) to see the result.
 The platform uses a modular Mongoose schema:
 - **Match**: Tracks players, scores, frames, status (live/finished), and winners.
 - **User**: Handle authentication and roles (ADMIN, UMPIRE, VIEWER).
-- **Event**: Detailed log of every point, foul, and match control action.
+- **Event**: Detailed log of every point, foul, and administrative action. Classified by `category` (admin/match) for dashboard filtering.
 - **ChatMessage**: Real-time chat integration for viewers.
 
 ## 🤝 Contribution

@@ -21,7 +21,7 @@ export async function GET() {
       Match.find({ status: "live" }).lean(),
       Match.find({ status: "scheduled" }).sort({ scheduledTime: 1 }).limit(5).lean(),
       User.countDocuments({ role: "umpire" }),
-      Event.find().sort({ createdAt: -1 }).limit(5).lean()
+      Event.find({ category: "admin" }).sort({ createdAt: -1 }).limit(10).lean()
     ]);
 
     // Calculate total active viewers across all live matches

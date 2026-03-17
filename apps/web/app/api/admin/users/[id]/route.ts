@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../../../../lib/auth";
 import dbConnect from "../../../../../lib/mongodb";
 import User from "../../../../../lib/models/User";
+import Event from "../../../../../lib/models/Event";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,16 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
+    // Log the update
+    await Event.create({
+      player: "System",
+      eventType: "user_update",
+      points: 0,
+      description: `Role Updated for ${user.name} to ${role}`,
+      category: "admin",
+      frameNumber: 0
+    });
+
     return NextResponse.json(user);
   } catch (error: any) {
     console.error("Error updating user role:", error);
@@ -64,6 +75,16 @@ export async function DELETE(req: Request, context: { params: Promise<{ id: stri
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
+
+    // Log the deletion
+    await Event.create({
+      player: "System",
+      eventType: "user_deleted",
+      points: 0,
+      description: `User Deleted: ${user.name} (${user.email})`,
+      category: "admin",
+      frameNumber: 0
+    });
 
     return NextResponse.json({ success: true, message: "User deleted" });
   } catch (error: any) {

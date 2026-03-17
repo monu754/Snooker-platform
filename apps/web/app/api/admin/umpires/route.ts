@@ -5,6 +5,7 @@ import dbConnect from "../../../../lib/mongodb";
 import User from "../../../../lib/models/User"; 
 import Event from "../../../../lib/models/Event"; 
 import bcrypt from "bcryptjs"; 
+import { sendUmpireWelcomeEmail } from "../../../../lib/mail";
 
 export async function GET() {
   try {
@@ -45,15 +46,20 @@ export async function POST(req: Request) {
       role: "umpire"
     });
 
+    // Send welcome email with credentials
+    // We pass the raw password here BEFORE returning it encoded or hashed in response (though it's hashed in DB)
+    await sendUmpireWelcomeEmail(email, name, password);
+
     // SAFETY NET: Wrap the event logger in a try/catch. 
     // If it fails (e.g., missing matchId), it won't crash the umpire creation!
     try {
       await Event.create({
-        frameNumber: 0,
         player: "System",
         eventType: "system_alert",
         points: 0,
-        description: `New Umpire Registered: ${name}`
+        description: `New Umpire Registered: ${name}`,
+        category: "admin",
+        frameNumber: 0
       });
     } catch (eventError) {
       console.warn("Non-fatal: Could not log event to dashboard (likely missing matchId).", eventError);

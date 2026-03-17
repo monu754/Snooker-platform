@@ -6,6 +6,8 @@ import { authOptions } from "../../../lib/auth";
 import dbConnect from "../../../lib/mongodb"; 
 import Match from "../../../lib/models/Match"; 
 import Event from "../../../lib/models/Event";
+import User from "../../../lib/models/User";
+import { sendMatchAssignmentEmail } from "../../../lib/mail";
 
 export async function GET(req: Request) {
   try {
@@ -72,8 +74,17 @@ export async function POST(req: Request) {
       player: "System",
       eventType: "system_alert",
       points: 0,
-      description: `Match Created: ${title} scheduled for ${new Date(scheduledTime).toLocaleDateString()}`
+      description: `Match Created: ${title} scheduled for ${new Date(scheduledTime).toLocaleDateString()}`,
+      category: "admin"
     });
+
+    // 3. If an umpire was assigned, send them an email
+    if (umpireId) {
+      const umpire = await User.findById(umpireId).lean();
+      if (umpire && (umpire as any).email) {
+        await sendMatchAssignmentEmail((umpire as any).email, (umpire as any).name, title, scheduledTime);
+      }
+    }
 
     return NextResponse.json({ success: true, match: newMatch }, { status: 201 });
 

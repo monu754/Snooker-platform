@@ -4,6 +4,7 @@ import CredentialsProvider from "next-auth/providers/credentials"; // <-- NEW
 import bcrypt from "bcryptjs"; // <-- NEW
 import dbConnect from "./mongodb";
 import User from "./models/User";
+import Event from "./models/Event";
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -91,4 +92,43 @@ export const authOptions: NextAuthOptions = {
   pages: {
     signIn: "/login",
   },
+  events: {
+    async signIn({ user }) {
+      try {
+        await dbConnect();
+        // Always fetch user from DB to get the latest role
+        const dbUser = await User.findOne({ email: user.email });
+        
+        if (dbUser?.role === "admin") {
+          await Event.create({
+            player: "System",
+            eventType: "admin_login",
+            description: `Admin Logged In: ${dbUser.name}`,
+            category: "admin",
+            frameNumber: 0,
+            points: 0
+          });
+        }
+      } catch (error) {
+        console.error("Error logging admin sign-in:", error);
+      }
+    },
+    async signOut({ token }) {
+      if (token?.role === "admin") {
+        try {
+          await dbConnect();
+          await Event.create({
+            player: "System",
+            eventType: "admin_logout",
+            description: `Admin Logged Out: ${token.name || token.email}`,
+            category: "admin",
+            frameNumber: 0,
+            points: 0
+          });
+        } catch (error) {
+          console.error("Error logging admin sign-out:", error);
+        }
+      }
+    }
+  }
 };
