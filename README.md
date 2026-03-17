@@ -112,6 +112,11 @@ The application requires several environment variables to function correctly.
 3. Open `apps/web/.env.local` and fill in your credentials:
 
 ```env
+
+# Copy the keys from your Google Cloud Console tab
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret_key
+
 # Database Connection
 MONGODB_URI=mongodb://localhost:27017/snooker-platform
 # OR Atlas: MONGODB_URI=mongodb+srv://<username>:<password>@cluster0.mongodb.net/snooker_platform
