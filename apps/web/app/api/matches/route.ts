@@ -8,6 +8,11 @@ import Match from "../../../lib/models/Match";
 import Event from "../../../lib/models/Event";
 import User from "../../../lib/models/User";
 import { sendMatchAssignmentEmail } from "../../../lib/mail";
+import { logError } from "../../../lib/logger";
+import { applyRateLimit, jsonError } from "../../../lib/request";
+import { isMaintenanceModeEnabled } from "../../../lib/settings";
+import { ValidationError, validateMatchInput } from "../../../lib/validation";
+import { normalizeViewerSessions } from "../../../lib/viewer-presence";
 
 export async function GET(req: Request) {
   try {
@@ -18,8 +23,22 @@ export async function GET(req: Request) {
     let query = {};
     if (statusFilter) query = { status: statusFilter };
 
-    const matches = await Match.find(query).sort({ scheduledTime: 1 }).lean();
-    return NextResponse.json({ success: true, matches }, { status: 200 });
+    const matches = await Match.find(query).sort({ scheduledTime: 1 }).select("+activeViewerSessions");
+    await Promise.all(
+      matches.map(async (match: any) => {
+        normalizeViewerSessions(match);
+        await match.save();
+      }),
+    );
+
+    return NextResponse.json({
+      success: true,
+      matches: matches.map((match: any) => {
+        const item = match.toObject();
+        delete item.activeViewerSessions;
+        return item;
+      }),
+    }, { status: 200 });
   } catch (error: any) {
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
@@ -27,6 +46,16 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    const maintenanceMode = await isMaintenanceModeEnabled();
+    if (maintenanceMode) {
+      return jsonError("Match creation is temporarily unavailable during maintenance mode.", 503);
+    }
+
+    const rateLimitResponse = applyRateLimit(req, "matches:create", 20, 60_000);
+    if (rateLimitResponse) {
+      return rateLimitResponse;
+    }
+
     await dbConnect();
 
     // Security Check
@@ -35,12 +64,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized. Admin access required." }, { status: 403 });
     }
 
-    const body = await req.json();
-    const { title, playerA, playerB, format, totalFrames, scheduledTime, venue, streamUrl, thumbnailUrl, umpireId } = body;
-
-    if (!title || !playerA || !playerB || !format || !scheduledTime || !venue) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
-    }
+    const { title, playerA, playerB, format, totalFrames, scheduledTime, venue, streamUrl, thumbnailUrl, umpireId } =
+      validateMatchInput(await req.json());
 
     const framesToWin = Math.floor(Number(totalFrames) / 2) + 1;
 
@@ -52,7 +77,7 @@ export async function POST(req: Request) {
       format,
       totalFrames: Number(totalFrames),
       framesToWin,
-      scheduledTime: new Date(scheduledTime),
+      scheduledTime,
       venue,
       streamUrl: streamUrl || "",
       thumbnailUrl: thumbnailUrl || "",
@@ -85,7 +110,12 @@ export async function POST(req: Request) {
     if (umpireId) {
       const umpire = await User.findById(umpireId).lean();
       if (umpire && (umpire as any).email) {
-        const mailResult = await sendMatchAssignmentEmail((umpire as any).email, (umpire as any).name, title, scheduledTime);
+          const mailResult = await sendMatchAssignmentEmail(
+            (umpire as any).email,
+            (umpire as any).name,
+            title,
+            scheduledTime.toISOString(),
+          );
         mailSent = mailResult.success;
         if (!mailResult.success) {
           mailError = (mailResult.error as any)?.message || "Failed to send email";
@@ -100,8 +130,12 @@ export async function POST(req: Request) {
       mailError
     }, { status: 201 });
 
-  } catch (error: any) {
-    console.error("Match Creation Error:", error);
+  } catch (error: unknown) {
+    if (error instanceof ValidationError) {
+      return jsonError(error.message, 400);
+    }
+
+    logError("matches.create_failed", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

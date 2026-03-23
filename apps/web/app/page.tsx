@@ -14,6 +14,9 @@ export default function HomePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
+  const [registrationAllowed, setRegistrationAllowed] = useState(true);
+  const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const [announcement, setAnnouncement] = useState("");
 
   // Auto advance slides every 5 seconds
   useEffect(() => {
@@ -40,6 +43,17 @@ export default function HomePage() {
     fetchLatestData(); 
     const interval = setInterval(fetchLatestData, 3000); // Polling for real-time score updates!
     return () => clearInterval(interval); 
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/settings", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        setRegistrationAllowed(data.allowRegistration !== false);
+        setMaintenanceMode(Boolean(data.maintenanceMode));
+        setAnnouncement(data.globalAnnouncement || "");
+      })
+      .catch(() => {});
   }, []);
 
   // Filter matches based on search query
@@ -121,7 +135,7 @@ export default function HomePage() {
           ) : (
             <>
               <Link href="/login" className="text-sm font-semibold text-zinc-300 hover:text-white transition-colors">Sign In</Link>
-              <Link href="/register" className="text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white px-4 md:px-5 py-2 md:py-2.5 rounded-full transition-colors shadow-lg shadow-emerald-900/20">
+              <Link href="/register" className={`text-sm font-semibold px-4 md:px-5 py-2 md:py-2.5 rounded-full transition-colors shadow-lg shadow-emerald-900/20 ${registrationAllowed && !maintenanceMode ? "bg-emerald-600 hover:bg-emerald-500 text-white" : "bg-zinc-800 text-zinc-400 pointer-events-none"}`}>
                 <span className="hidden sm:inline">Subscribe Now</span>
                 <span className="sm:hidden">Subscribe</span>
               </Link>
@@ -129,6 +143,16 @@ export default function HomePage() {
           )}
         </div>
       </header>
+
+      {(maintenanceMode || announcement) && (
+        <section className="max-w-[1600px] mx-auto px-4 md:px-8 pt-6">
+          <div className={`rounded-2xl border px-4 py-3 text-sm ${maintenanceMode ? "bg-amber-500/10 border-amber-500/20 text-amber-300" : "bg-zinc-900 border-zinc-800 text-zinc-300"}`}>
+            {maintenanceMode
+              ? "Maintenance mode is active. Viewing remains available, but account and admin changes are temporarily limited."
+              : announcement}
+          </div>
+        </section>
+      )}
 
       {/* Hero / Top Live Matches Carousel (Hotstar Style) */}
       <section className="relative w-full h-[60vh] md:h-[75vh] bg-black overflow-hidden border-b border-zinc-800 flex items-center justify-center">

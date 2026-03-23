@@ -6,6 +6,10 @@ import User from "../../../../lib/models/User";
 import Event from "../../../../lib/models/Event"; 
 import bcrypt from "bcryptjs"; 
 import { sendUmpireWelcomeEmail } from "../../../../lib/mail";
+import { logError, logWarn } from "../../../../lib/logger";
+import { applyRateLimit, jsonError } from "../../../../lib/request";
+import { isMaintenanceModeEnabled } from "../../../../lib/settings";
+import { ValidationError, validateUmpireCreationInput } from "../../../../lib/validation";
 
 export async function GET() {
   try {
@@ -22,15 +26,21 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    const maintenanceMode = await isMaintenanceModeEnabled();
+    if (maintenanceMode) {
+      return jsonError("Umpire creation is temporarily unavailable during maintenance mode.", 503);
+    }
+
+    const rateLimitResponse = applyRateLimit(req, "umpires:create", 10, 60_000);
+    if (rateLimitResponse) {
+      return rateLimitResponse;
+    }
+
     await dbConnect();
     const session = await getServerSession(authOptions);
     if (!session || (session.user as any)?.role !== "admin") return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
 
-    const { name, email, password } = await req.json();
-
-    if (!name || !email || !password) {
-      return NextResponse.json({ error: "Name, email, and password are required" }, { status: 400 });
-    }
+    const { name, email, password } = validateUmpireCreationInput(await req.json());
 
     const existingUser = await User.findOne({ email });
     if (existingUser) return NextResponse.json({ error: "Email already in use" }, { status: 400 });
@@ -62,7 +72,7 @@ export async function POST(req: Request) {
         frameNumber: 0
       });
     } catch (eventError) {
-      console.warn("Non-fatal: Could not log event to dashboard (likely missing matchId).", eventError);
+      logWarn("umpires.create_event_failed", { error: String(eventError) });
     }
 
     return NextResponse.json({ 
@@ -72,9 +82,12 @@ export async function POST(req: Request) {
       mailError: mailResult.error ? (mailResult.error as any).message : null
     }, { status: 201 });
 
-  } catch (error: any) {
-    console.error("Umpire Creation Error:", error);
-    // Return the EXACT error message to the frontend so we can see what broke
-    return NextResponse.json({ error: error.message || "Server Error" }, { status: 500 });
+  } catch (error: unknown) {
+    if (error instanceof ValidationError) {
+      return jsonError(error.message, 400);
+    }
+
+    logError("umpires.create_failed", error);
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Server Error" }, { status: 500 });
   }
 }

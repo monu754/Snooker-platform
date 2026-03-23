@@ -4,8 +4,12 @@ import bcrypt from "bcryptjs";
 import dbConnect from "../../../../lib/mongodb";
 import User from "../../../../lib/models/User";
 import { authOptions } from "../../../../lib/auth";
+import { logError } from "../../../../lib/logger";
+import { jsonError } from "../../../../lib/request";
+import { isMaintenanceModeEnabled } from "../../../../lib/settings";
+import { ValidationError, validateProfileUpdateInput } from "../../../../lib/validation";
 
-export async function PUT(req: Request) {
+export async function GET() {
   try {
     const session = await getServerSession(authOptions);
 
@@ -13,11 +17,48 @@ export async function PUT(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { name, password } = await req.json();
+    await dbConnect();
 
-    if (!name && !password) {
-      return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+    const user = await User.findOne(
+      { email: (session.user as any).email },
+      { name: 1, email: 1, role: 1, image: 1, createdAt: 1, updatedAt: 1 },
+    ).lean();
+
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
+
+    return NextResponse.json({
+      success: true,
+      user: {
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        image: user.image || "",
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      },
+    });
+  } catch (error: unknown) {
+    logError("profile.fetch_failed", error);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+  }
+}
+
+export async function PUT(req: Request) {
+  try {
+    const maintenanceMode = await isMaintenanceModeEnabled();
+    if (maintenanceMode) {
+      return jsonError("Profile updates are temporarily unavailable during maintenance mode.", 503);
+    }
+
+    const session = await getServerSession(authOptions);
+
+    if (!session || !session.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { name, password } = validateProfileUpdateInput(await req.json());
 
     await dbConnect();
 
@@ -46,8 +87,12 @@ export async function PUT(req: Request) {
         email: updatedUser.email,
       },
     });
-  } catch (error: any) {
-    console.error("Profile Update Error:", error);
+  } catch (error: unknown) {
+    if (error instanceof ValidationError) {
+      return jsonError(error.message, 400);
+    }
+
+    logError("profile.update_failed", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

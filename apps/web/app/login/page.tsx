@@ -1,17 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Lock, Mail, Activity, AlertCircle, ArrowLeft } from "lucide-react";
+import { Lock, Mail, Activity, AlertCircle, ArrowLeft, Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/settings", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        setMaintenanceMode(Boolean(data.maintenanceMode));
+      })
+      .catch(() => {
+        setMaintenanceMode(false);
+      })
+      .finally(() => {
+        setSettingsLoaded(true);
+      });
+  }, []);
 
   const handleCredentialsLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,6 +79,12 @@ export default function LoginPage() {
           </div>
         )}
 
+        {settingsLoaded && maintenanceMode && (
+          <div className="bg-amber-500/10 border border-amber-500/20 text-amber-300 p-3 rounded-lg mb-6 text-sm">
+            Maintenance mode is active. Viewer access is blocked right now. Admins and umpires can still sign in with credentials.
+          </div>
+        )}
+
         {/* Umpire / Admin Credentials Form */}
         <form onSubmit={handleCredentialsLogin} className="space-y-4 mb-6">
           <div className="space-y-1.5">
@@ -84,13 +107,21 @@ export default function LoginPage() {
             <div className="relative">
               <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" size={16} />
               <input 
-                type="password" 
+                type={showPassword ? "text" : "password"} 
                 required 
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••" 
-                className="w-full bg-[#09090b] border border-zinc-800 rounded-xl pl-10 pr-4 py-3 text-sm text-white focus:border-emerald-500 outline-none transition-colors"
+                className="w-full bg-[#09090b] border border-zinc-800 rounded-xl pl-10 pr-12 py-3 text-sm text-white focus:border-emerald-500 outline-none transition-colors"
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 cursor-pointer"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
             </div>
           </div>
 
@@ -112,7 +143,8 @@ export default function LoginPage() {
         <button 
           type="button"
           onClick={() => signIn("google", { callbackUrl: "/" })}
-          className="w-full bg-white hover:bg-zinc-200 text-black font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-3 cursor-pointer"
+          disabled={maintenanceMode}
+          className="w-full bg-white hover:bg-zinc-200 disabled:bg-zinc-700 disabled:text-zinc-400 text-black font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-3 cursor-pointer disabled:cursor-not-allowed"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">
             <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -125,9 +157,13 @@ export default function LoginPage() {
 
         <div className="mt-6 text-center text-sm text-zinc-400">
           Not a registered user?{' '}
-          <Link href="/register" className="text-emerald-500 hover:text-emerald-400 font-medium transition-colors">
-            Register for access
-          </Link>
+          {maintenanceMode ? (
+            <span className="text-zinc-500">Registration is temporarily unavailable</span>
+          ) : (
+            <Link href="/register" className="text-emerald-500 hover:text-emerald-400 font-medium transition-colors">
+              Register for access
+            </Link>
+          )}
         </div>
       </div>
     </div>

@@ -28,3 +28,4 @@ apps/**/out
 .vscode
 .idea
 .gemini
+tmp

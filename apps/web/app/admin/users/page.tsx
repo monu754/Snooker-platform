@@ -11,12 +11,22 @@ interface UserData {
   createdAt: string;
 }
 
+type RoleFilter = "all" | UserData["role"];
+
+const FILTER_OPTIONS: Array<{ key: RoleFilter; label: string }> = [
+  { key: "all", label: "All" },
+  { key: "admin", label: "Admin" },
+  { key: "umpire", label: "Umpire" },
+  { key: "user", label: "User" },
+];
+
 export default function UserManagerPage() {
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
 
   const fetchUsers = async () => {
     try {
@@ -81,10 +91,14 @@ export default function UserManagerPage() {
     }
   };
 
-  const filteredUsers = users.filter(user => 
-    user.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    user.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredUsers = users
+    .filter((user) => roleFilter === "all" || user.role === roleFilter)
+    .filter(
+      (user) =>
+        user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.email.toLowerCase().includes(searchTerm.toLowerCase()),
+    )
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   if (loading) return <div className="p-8"><div className="animate-pulse h-10 w-48 bg-zinc-900 rounded mb-8"></div><div className="h-[400px] bg-zinc-900 rounded-xl"></div></div>;
   if (error) return <div className="p-8 text-red-500 flex items-center gap-2"><AlertCircle /> {error}</div>;
@@ -109,6 +123,23 @@ export default function UserManagerPage() {
         </div>
       </header>
 
+      <div className="mb-6 flex flex-wrap gap-2 rounded-xl border border-zinc-800/50 bg-[#18181b] p-2">
+        {FILTER_OPTIONS.map((option) => (
+          <button
+            key={option.key}
+            type="button"
+            onClick={() => setRoleFilter(option.key)}
+            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+              roleFilter === option.key
+                ? "bg-emerald-600 text-white"
+                : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+
       <div className="bg-[#18181b] border border-zinc-800/50 rounded-xl shadow-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -124,7 +155,9 @@ export default function UserManagerPage() {
             <tbody className="divide-y divide-zinc-800/50">
               {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center text-zinc-500">No users found matching "{searchTerm}"</td>
+                  <td colSpan={5} className="p-8 text-center text-zinc-500">
+                    No {roleFilter === "all" ? "" : `${roleFilter} `}users found{searchTerm ? ` matching "${searchTerm}"` : ""}.
+                  </td>
                 </tr>
               ) : (
                 filteredUsers.map((user) => (

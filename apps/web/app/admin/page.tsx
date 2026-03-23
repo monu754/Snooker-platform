@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Play, Settings2, ShieldAlert, Activity, Users, Trash2, AlertCircle } from "lucide-react";
+import { getPusherClient } from "../../lib/pusher";
 
 interface DashboardData {
   stats: { liveCount: number; scheduledCount: number; activeViewers: number; activeUmpires: number; };
@@ -33,7 +34,32 @@ const fetchDashboardData = async () => {
     fetchDashboardData(); 
     // Auto-refresh dashboard stats every 3 seconds!
     const interval = setInterval(fetchDashboardData, 3000);
-    return () => clearInterval(interval);
+    const pusher = getPusherClient();
+    const channel = pusher.subscribe("admin-dashboard");
+
+    channel.bind("viewer-stats-updated", (event: { matchId?: string; matchViewers?: number; activeViewers?: number }) => {
+      setData((prev) => {
+        if (!prev) return prev;
+
+        return {
+          ...prev,
+          stats: {
+            ...prev.stats,
+            activeViewers: typeof event.activeViewers === "number" ? event.activeViewers : prev.stats.activeViewers,
+          },
+          actionableMatches: prev.actionableMatches.map((match) =>
+            match._id === event.matchId && typeof event.matchViewers === "number"
+              ? { ...match, viewers: event.matchViewers }
+              : match,
+          ),
+        };
+      });
+    });
+
+    return () => {
+      clearInterval(interval);
+      pusher.unsubscribe("admin-dashboard");
+    };
   }, []);
 
   const handleDeleteMatch = async (id: string) => {
@@ -173,7 +199,13 @@ const fetchDashboardData = async () => {
               data.recentEvents.map((event) => (
                 <LogItem 
                   key={event._id}
-                  time={new Date(event.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} 
+                  time={new Date(event.createdAt).toLocaleString([], {
+                    year: "numeric",
+                    month: "short",
+                    day: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })} 
                   action={event.eventType.replace('_', ' ').toUpperCase()} 
                   target={event.description} 
                   isAlert={event.eventType === "foul" || event.eventType === "system_alert"} 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Plus, Trash2, Play, Pause, Search } from "lucide-react";
+import { Plus, Trash2, Play, Pause, Search, Pencil } from "lucide-react";
 
 export default function MatchManagerPage() {
   const [matches, setMatches] = useState<any[]>([]);
@@ -164,6 +164,9 @@ export default function MatchManagerPage() {
                              <Play size={16} />
                            </button>
                          )}
+                         <Link href={`/admin/matches/${match._id}/edit`} className="p-2 bg-blue-500/10 text-blue-400 hover:bg-blue-500 hover:text-white rounded transition-colors" title="Edit Match">
+                           <Pencil size={16} />
+                         </Link>
                          <button onClick={() => handleDelete(match._id)} className="p-2 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded transition-colors" title="Delete Match">
                            <Trash2 size={16} />
                          </button>

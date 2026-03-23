@@ -1,9 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { User, Mail, Lock, CheckCircle, AlertCircle, ArrowLeft, Camera, Loader2 } from "lucide-react";
+
+type ProfileMeta = {
+  createdAt: string;
+  updatedAt: string;
+};
 
 export default function ProfilePage() {
   const { data: session, status, update } = useSession();
@@ -12,6 +17,27 @@ export default function ProfilePage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
+  const [profileMeta, setProfileMeta] = useState<ProfileMeta | null>(null);
+
+  useEffect(() => {
+    setName(session?.user?.name || "");
+  }, [session?.user?.name]);
+
+  useEffect(() => {
+    if (!session?.user) return;
+
+    fetch("/api/user/profile", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.user) {
+          setProfileMeta({
+            createdAt: data.user.createdAt,
+            updatedAt: data.user.updatedAt,
+          });
+        }
+      })
+      .catch(() => {});
+  }, [session?.user]);
 
   if (status === "loading") {
     return (
@@ -60,6 +86,7 @@ export default function ProfilePage() {
       setMessage({ type: "success", text: "Profile updated successfully!" });
       setPassword("");
       setConfirmPassword("");
+      setProfileMeta((prev) => prev ? { ...prev, updatedAt: new Date().toISOString() } : prev);
       
       // Update the session in real-time
       await update({ ...session, user: { ...session.user, name } });
@@ -123,15 +150,31 @@ export default function ProfilePage() {
             </div>
 
             <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 backdrop-blur-sm">
-              <h3 className="text-sm font-bold text-zinc-400 uppercase tracking-widest mb-4">Account Stats</h3>
+                <h3 className="text-sm font-bold text-zinc-400 uppercase tracking-widest mb-4">Account Stats</h3>
               <div className="space-y-4 text-sm font-medium">
                 <div className="flex justify-between">
                   <span className="text-zinc-500">Member Since</span>
-                  <span className="text-zinc-300">Mar 2024</span>
+                  <span className="text-zinc-300">
+                    {profileMeta?.createdAt
+                      ? new Date(profileMeta.createdAt).toLocaleDateString([], {
+                          year: "numeric",
+                          month: "short",
+                          day: "2-digit",
+                        })
+                      : "Loading..."}
+                  </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-zinc-500">Status</span>
-                  <span className="text-emerald-500">Active</span>
+                  <span className="text-zinc-500">Last Updated</span>
+                  <span className="text-emerald-500">
+                    {profileMeta?.updatedAt
+                      ? new Date(profileMeta.updatedAt).toLocaleDateString([], {
+                          year: "numeric",
+                          month: "short",
+                          day: "2-digit",
+                        })
+                      : "Loading..."}
+                  </span>
                 </div>
               </div>
             </div>

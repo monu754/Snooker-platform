@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { logError, logInfo, logWarn } from "./logger";
 
 // Create a transporter using SMTP settings from environment variables
 const transporter = nodemailer.createTransport({
@@ -17,6 +18,11 @@ const FROM_EMAIL = process.env.SMTP_FROM || '"Snooker Platform" <noreply@example
  * Sends a welcome email to a newly created umpire with their credentials.
  */
 export async function sendUmpireWelcomeEmail(email: string, name: string, password: string) {
+  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    logWarn("mail.smtp_not_configured", { email, template: "umpire_welcome" });
+    return { success: false, error: new Error("SMTP is not configured") };
+  }
+
   const mailOptions = {
     from: FROM_EMAIL,
     to: email,
@@ -41,10 +47,10 @@ export async function sendUmpireWelcomeEmail(email: string, name: string, passwo
 
   try {
     const info = await transporter.sendMail(mailOptions);
-    console.log("Umpire Welcome Email sent: %s", info.messageId);
+    logInfo("mail.umpire_welcome.sent", { email, messageId: info.messageId });
     return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error("Error sending Umpire Welcome Email:", error);
+    logError("mail.umpire_welcome.failed", error, { email });
     return { success: false, error };
   }
 }
@@ -53,6 +59,11 @@ export async function sendUmpireWelcomeEmail(email: string, name: string, passwo
  * Sends a notification email to an umpire when they are assigned to a match.
  */
 export async function sendMatchAssignmentEmail(email: string, name: string, matchTitle: string, scheduledTime: string) {
+  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    logWarn("mail.smtp_not_configured", { email, template: "match_assignment" });
+    return { success: false, error: new Error("SMTP is not configured") };
+  }
+
   const date = new Date(scheduledTime).toLocaleString();
   
   const mailOptions = {
@@ -76,10 +87,10 @@ export async function sendMatchAssignmentEmail(email: string, name: string, matc
 
   try {
     const info = await transporter.sendMail(mailOptions);
-    console.log("Match Assignment Email sent: %s", info.messageId);
+    logInfo("mail.match_assignment.sent", { email, matchTitle, messageId: info.messageId });
     return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error("Error sending Match Assignment Email:", error);
+    logError("mail.match_assignment.failed", error, { email, matchTitle });
     return { success: false, error };
   }
 }

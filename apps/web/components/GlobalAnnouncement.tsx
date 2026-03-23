@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Megaphone, X } from "lucide-react";
-import Pusher from "pusher-js";
+import { getPusherClient } from "../lib/pusher";
 
 export default function GlobalAnnouncement() {
   const [announcement, setAnnouncement] = useState<string>("");
@@ -25,10 +25,7 @@ export default function GlobalAnnouncement() {
     fetchSettings();
 
     // 2. Setup Pusher for real-time updates
-    const pusher = new Pusher(process.env.NEXT_PUBLIC_PUSHER_KEY!, {
-      cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER!,
-    });
-
+    const pusher = getPusherClient();
     const channel = pusher.subscribe("platform-settings");
     channel.bind("settings-updated", (data: any) => {
       setAnnouncement(data.globalAnnouncement || "");

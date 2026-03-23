@@ -2,15 +2,28 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import dbConnect from "../../../../lib/mongodb";
 import User from "../../../../lib/models/User";
+import { logError } from "../../../../lib/logger";
+import { applyRateLimit, jsonError } from "../../../../lib/request";
+import { getPlatformSettings } from "../../../../lib/settings";
+import { ValidationError, validateRegistrationInput } from "../../../../lib/validation";
 
 export async function POST(req: Request) {
   try {
-    const { name, email, password } = await req.json();
-
-    if (!name || !email || !password) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    const rateLimitResponse = applyRateLimit(req, "register", 5, 60_000);
+    if (rateLimitResponse) {
+      return rateLimitResponse;
     }
 
+    const settings = await getPlatformSettings();
+    if (settings.maintenanceMode) {
+      return jsonError("Registration is temporarily unavailable during maintenance mode.", 503);
+    }
+
+    if (!settings.allowRegistration) {
+      return jsonError("Registration is currently disabled by the administrator.", 403);
+    }
+
+    const { name, email, password } = validateRegistrationInput(await req.json());
     await dbConnect();
 
     // Check if user already exists
@@ -35,8 +48,12 @@ export async function POST(req: Request) {
       userId: newUser._id 
     }, { status: 201 });
 
-  } catch (error: any) {
-    console.error("Registration Error:", error);
+  } catch (error: unknown) {
+    if (error instanceof ValidationError) {
+      return jsonError(error.message, 400);
+    }
+
+    logError("auth.register.failed", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

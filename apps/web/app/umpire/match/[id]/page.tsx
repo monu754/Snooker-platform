@@ -6,8 +6,29 @@ import { useRouter, useParams } from "next/navigation";
 import { AlertTriangle, Undo2, Flag, Pause, Play, Square, Clock, Activity } from "lucide-react";
 
 type Player = "A" | "B";
-type EventLog = { id: string; time: string; player: Player; action: string; points: number | string; type: "score" | "foul" | "system" };
-type GameState = { scoreA: number; scoreB: number; breakScore: number; activePlayer: Player; events: EventLog[] };
+type EventActor = Player | "system";
+type EventLog = {
+  id: string;
+  persistedId?: string;
+  time: string;
+  player: EventActor;
+  action: string;
+  points: number | string;
+  type: "score" | "foul" | "system";
+};
+type GameState = {
+  scoreA: number;
+  scoreB: number;
+  breakScore: number;
+  activePlayer: Player;
+  frame: number;
+  framesWonA: number;
+  framesWonB: number;
+  matchStatus: "scheduled" | "live" | "paused" | "finished";
+  winner?: string;
+  events: EventLog[];
+  undoEventId?: string;
+};
 
 export default function UmpireScoringPage() {
   const { data: session, status } = useSession();
@@ -80,12 +101,14 @@ export default function UmpireScoringPage() {
           setFramesWonA(currentMatch.framesWonA || 0);
           setFramesWonB(currentMatch.framesWonB || 0);
           setFrame(currentMatch.currentFrame || 1);
+          setActivePlayer(currentMatch.activePlayer || "A");
         }
         if (data.events) {
           setEvents(data.events.map((e: any) => ({
             id: e._id || Date.now().toString(),
+            persistedId: e._id?.toString?.() || e._id,
             time: new Date(e.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            player: e.player,
+            player: e.player === "A" || e.player === "B" ? e.player : "system",
             action: e.description,
             points: e.eventType === "foul" ? `Opponent +${e.points}` : `+${e.points}`,
             type: e.eventType === "foul" ? "foul" : (e.eventType === "score_update" ? "score" : "system")
@@ -101,10 +124,31 @@ export default function UmpireScoringPage() {
 
 
   const saveHistory = () => {
-    setHistory(prev => [...prev, { scoreA, scoreB, breakScore, activePlayer, events }]);
+    setHistory(prev => [...prev, {
+      scoreA,
+      scoreB,
+      breakScore,
+      activePlayer,
+      frame,
+      framesWonA,
+      framesWonB,
+      matchStatus,
+      winner: match?.winner,
+      events: [...events],
+    }]);
   };
 
-  const undoLastAction = () => {
+  const attachUndoEventId = (eventId?: string) => {
+    if (!eventId) return;
+    setHistory((prev) => {
+      if (prev.length === 0) return prev;
+      return prev.map((entry, index) =>
+        index === prev.length - 1 ? { ...entry, undoEventId: eventId } : entry,
+      );
+    });
+  };
+
+  const undoLastAction = async () => {
     if (history.length === 0 || matchStatus !== "live") return;
     const lastState = history[history.length - 1];
     if (!lastState) return;
@@ -112,11 +156,35 @@ export default function UmpireScoringPage() {
     setScoreB(lastState.scoreB);
     setBreakScore(lastState.breakScore);
     setActivePlayer(lastState.activePlayer);
+    setFrame(lastState.frame);
+    setFramesWonA(lastState.framesWonA);
+    setFramesWonB(lastState.framesWonB);
+    setMatchStatus(lastState.matchStatus);
     setEvents(lastState.events);
+    setMatch((prev: any) => prev ? {
+      ...prev,
+      scoreA: lastState.scoreA,
+      scoreB: lastState.scoreB,
+      activePlayer: lastState.activePlayer,
+      currentFrame: lastState.frame,
+      framesWonA: lastState.framesWonA,
+      framesWonB: lastState.framesWonB,
+      status: lastState.matchStatus,
+      winner: lastState.winner || "",
+    } : prev);
     setHistory(prev => prev.slice(0, -1));
-    
-    // Sync undo to DB
-    syncToDatabase({ scoreA: lastState.scoreA, scoreB: lastState.scoreB });
+
+    await syncToDatabase({
+      scoreA: lastState.scoreA,
+      scoreB: lastState.scoreB,
+      activePlayer: lastState.activePlayer,
+      currentFrame: lastState.frame,
+      framesWonA: lastState.framesWonA,
+      framesWonB: lastState.framesWonB,
+      status: lastState.matchStatus,
+      winner: lastState.winner || "",
+      undoEventId: lastState.undoEventId,
+    });
   };
 
   const switchPlayer = (newPlayer: Player) => {
@@ -131,11 +199,15 @@ export default function UmpireScoringPage() {
   // Centralized DB Sync Function
   const syncToDatabase = async (updates: any, eventLog?: EventLog) => {
     try {
-      await fetch(`/api/matches/${matchId}`, {
+      const response = await fetch(`/api/matches/${matchId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...updates, eventLog })
       });
+      if (!response.ok) {
+        throw new Error("Database sync failed");
+      }
+      return response.json();
     } catch (error) { console.error("Database sync failed", error); }
   };
 
@@ -153,7 +225,8 @@ export default function UmpireScoringPage() {
     const ev = logEvent(activePlayer, `Potted ${ballName}`, `+${points}`, "score");
     
     // Instantly sync the new score to the database!
-    await syncToDatabase({ scoreA: newScoreA, scoreB: newScoreB, currentFrame: frame, framesWonA, framesWonB }, ev);
+    const response = await syncToDatabase({ scoreA: newScoreA, scoreB: newScoreB, currentFrame: frame, framesWonA, framesWonB }, ev);
+    attachUndoEventId(response?.event?.id);
   };
 
   const addFoul = async (penalty: number) => {
@@ -167,12 +240,17 @@ export default function UmpireScoringPage() {
     setScoreB(newScoreB);
     const ev = logEvent(activePlayer, `Foul`, `Opponent +${penalty}`, "foul");
     
-    await syncToDatabase({ scoreA: newScoreA, scoreB: newScoreB, currentFrame: frame, framesWonA, framesWonB }, ev);
+    const response = await syncToDatabase({ scoreA: newScoreA, scoreB: newScoreB, currentFrame: frame, framesWonA, framesWonB }, ev);
+    attachUndoEventId(response?.event?.id);
     switchPlayer(activePlayer === "A" ? "B" : "A");
   };
 
   const handleEndFrame = async () => {
     if (matchStatus !== "live") return;
+    if (scoreA === scoreB) {
+      alert("A frame cannot be ended while the scores are tied.");
+      return;
+    }
 
     if (window.confirm("Are you sure you want to end this frame?")) {
       saveHistory();
@@ -197,7 +275,7 @@ export default function UmpireScoringPage() {
         setBreakScore(0);
         const winnerName = matchWinner === "A" ? match.playerA : match.playerB;
         const finalEv = logEvent(matchWinner, "Won Match", `Final Score: ${newFramesA} - ${newFramesB}`, "system");
-        await syncToDatabase({ 
+        const response = await syncToDatabase({ 
           scoreA: 0, 
           scoreB: 0, 
           framesWonA: newFramesA, 
@@ -205,18 +283,20 @@ export default function UmpireScoringPage() {
           status: "finished",
           winner: winnerName
         }, finalEv);
+        attachUndoEventId(response?.event?.id);
         alert(`Match Concluded! Winner: ${winnerName}`);
       } else {
         setScoreA(0);
         setScoreB(0);
         setBreakScore(0);
         setFrame(newFrameNum);
-        await syncToDatabase({ scoreA: 0, scoreB: 0, framesWonA: newFramesA, framesWonB: newFramesB, currentFrame: newFrameNum }, ev);
+        const response = await syncToDatabase({ scoreA: 0, scoreB: 0, framesWonA: newFramesA, framesWonB: newFramesB, currentFrame: newFrameNum }, ev);
+        attachUndoEventId(response?.event?.id);
       }
     }
   };
 
-  const logEvent = (player: Player, action: string, points: string, type: "score" | "foul" | "system") => {
+  const logEvent = (player: EventActor, action: string, points: string, type: "score" | "foul" | "system") => {
     const newEvent: EventLog = { 
       id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, 
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 
@@ -242,8 +322,9 @@ export default function UmpireScoringPage() {
       else updates.winner = "Draw"; // Or logic for decider
     }
 
-    const ev = logEvent("A", `Match ${action.toUpperCase()}`, "-", "system");
-    await syncToDatabase(updates, ev);
+    const ev = logEvent("system", `Match ${action.toUpperCase()}`, "-", "system");
+    const response = await syncToDatabase(updates, ev);
+    attachUndoEventId(response?.event?.id);
   };
 
   if (isLoading) return <div className="min-h-screen flex items-center justify-center"><Activity className="animate-spin text-emerald-500" size={32} /></div>;
@@ -416,4 +497,4 @@ function BallButton({ color, points, text, onClick, disabled }: any) {
     </button>
   );
 }
-
+

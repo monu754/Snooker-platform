@@ -1,6 +1,27 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
   "ui": "tui",
+  "globalEnv": [
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET",
+    "MONGODB_URI",
+    "NEXTAUTH_URL",
+    "NEXTAUTH_SECRET",
+    "PUSHER_APP_ID",
+    "NEXT_PUBLIC_PUSHER_KEY",
+    "PUSHER_SECRET",
+    "NEXT_PUBLIC_PUSHER_CLUSTER",
+    "SMTP_HOST",
+    "SMTP_PORT",
+    "SMTP_USER",
+    "SMTP_PASS",
+    "SMTP_FROM",
+    "SMTP_SECURE",
+    "UPLOAD_STORAGE_MODE",
+    "UPLOAD_EXTERNAL_ENDPOINT",
+    "UPLOAD_EXTERNAL_PUBLIC_BASE_URL",
+    "UPLOAD_EXTERNAL_API_KEY"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

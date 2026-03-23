@@ -4,6 +4,9 @@ import { authOptions } from "../../../../../lib/auth";
 import dbConnect from "../../../../../lib/mongodb";
 import User from "../../../../../lib/models/User";
 import Event from "../../../../../lib/models/Event";
+import { logError } from "../../../../../lib/logger";
+import { jsonError } from "../../../../../lib/request";
+import { ValidationError, validateUserRoleInput } from "../../../../../lib/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -16,12 +19,7 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
 
     const params = await context.params;
     const { id } = params;
-    const body = await req.json();
-    const { role } = body;
-
-    if (!["admin", "umpire", "user"].includes(role)) {
-      return NextResponse.json({ error: "Invalid role" }, { status: 400 });
-    }
+    const { role } = validateUserRoleInput(await req.json());
 
     await dbConnect();
 
@@ -47,8 +45,12 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
     });
 
     return NextResponse.json(user);
-  } catch (error: any) {
-    console.error("Error updating user role:", error);
+  } catch (error: unknown) {
+    if (error instanceof ValidationError) {
+      return jsonError(error.message, 400);
+    }
+
+    logError("admin.users.update_role_failed", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
@@ -87,8 +89,8 @@ export async function DELETE(req: Request, context: { params: Promise<{ id: stri
     });
 
     return NextResponse.json({ success: true, message: "User deleted" });
-  } catch (error: any) {
-    console.error("Error deleting user:", error);
+  } catch (error: unknown) {
+    logError("admin.users.delete_failed", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

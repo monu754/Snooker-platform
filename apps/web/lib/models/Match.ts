@@ -14,6 +14,10 @@ export interface IMatch extends Document {
   thumbnailUrl?: string;
   status: "scheduled" | "live" | "paused" | "finished";
   viewers: number;
+  activeViewerSessions: Array<{
+    token: string;
+    lastSeenAt: Date;
+  }>;
   activePlayer?: "A" | "B";
 
   // --- NEW SCORING FIELDS ---
@@ -40,6 +44,19 @@ const MatchSchema: Schema = new Schema(
     thumbnailUrl: { type: String },
     status: { type: String, enum: ["scheduled", "live", "paused", "finished"], default: "scheduled" },
     viewers: { type: Number, default: 0 },
+    activeViewerSessions: {
+      type: [
+        new Schema(
+          {
+            token: { type: String, required: true },
+            lastSeenAt: { type: Date, required: true },
+          },
+          { _id: false },
+        ),
+      ],
+      default: [],
+      select: false,
+    },
     activePlayer: { type: String, enum: ["A", "B"], default: "A" },
 
     // --- NEW SCORING FIELDS ---

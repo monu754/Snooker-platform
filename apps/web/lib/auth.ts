@@ -5,6 +5,8 @@ import bcrypt from "bcryptjs"; // <-- NEW
 import dbConnect from "./mongodb";
 import User from "./models/User";
 import Event from "./models/Event";
+import { logError, logInfo, logWarn } from "./logger";
+import { getPlatformSettings } from "./settings";
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -17,32 +19,35 @@ export const authOptions: NextAuthOptions = {
       name: "Credentials",
       credentials: {
         email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" }
+        password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        console.log("NextAuth: Starting authorize for", credentials?.email);
         await dbConnect();
         if (!credentials?.email || !credentials?.password) {
-          console.log("NextAuth: Missing email or password");
+          logWarn("auth.credentials.missing_fields");
           return null;
         }
 
         // Find user and explicitly select the hidden password field
         const user = await User.findOne({ email: credentials.email }).select("+password");
-        console.log("NextAuth: Found user in DB?", !!user);
         
         if (!user || !user.password) {
-          console.log("NextAuth: User not found or no password hash");
+          logWarn("auth.credentials.user_missing", { email: credentials.email });
+          return null;
+        }
+
+        const settings = await getPlatformSettings();
+        if (settings.maintenanceMode && user.role === "user") {
+          logWarn("auth.credentials.blocked_by_maintenance", { email: credentials.email });
           return null;
         }
 
         // Verify the password
         const isPasswordValid = await bcrypt.compare(credentials.password, user.password);
-        console.log("NextAuth: Password valid?", isPasswordValid);
         
         if (!isPasswordValid) return null;
 
-        console.log("NextAuth: Login successful for", user.email);
+        logInfo("auth.credentials.success", { email: user.email, role: user.role });
         // Return the user object for the session
         return {
           id: user._id.toString(),
@@ -60,11 +65,20 @@ export const authOptions: NextAuthOptions = {
         try {
           await dbConnect();
           const existingUser = await User.findOne({ email: user.email });
+          const settings = await getPlatformSettings();
+          if (!existingUser && !settings.allowRegistration) {
+            return false;
+          }
+          if (settings.maintenanceMode && (!existingUser || existingUser.role === "user")) {
+            return false;
+          }
+
           if (!existingUser) {
             await User.create({ name: user.name, email: user.email, image: user.image, role: "user" });
           }
           return true;
-        } catch (error) {
+        } catch (error: unknown) {
+          logError("auth.google.sign_in_failed", error, { email: user.email });
           return false;
         }
       }
@@ -110,7 +124,7 @@ export const authOptions: NextAuthOptions = {
           });
         }
       } catch (error) {
-        console.error("Error logging admin sign-in:", error);
+        logError("auth.admin_sign_in_event_failed", error, { email: user.email });
       }
     },
     async signOut({ token }) {
@@ -126,7 +140,7 @@ export const authOptions: NextAuthOptions = {
             points: 0
           });
         } catch (error) {
-          console.error("Error logging admin sign-out:", error);
+          logError("auth.admin_sign_out_event_failed", error, { email: String(token.email ?? "") });
         }
       }
     }
