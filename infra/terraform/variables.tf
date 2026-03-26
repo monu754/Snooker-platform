@@ -87,13 +87,13 @@ variable "app_secret_arns" {
 
 variable "public_env" {
   type = object({
-    nextauth_url                 = string
-    next_public_vapid_public_key = string
-    vapid_subject                = string
-    upload_storage_mode          = string
-    upload_object_endpoint       = optional(string)
+    nextauth_url                  = string
+    next_public_vapid_public_key  = string
+    vapid_subject                 = string
+    upload_storage_mode           = string
+    upload_object_endpoint        = optional(string)
     upload_object_public_base_url = optional(string)
-    billing_checkout_endpoint    = optional(string)
+    billing_checkout_endpoint     = optional(string)
   })
   description = "Non-secret environment values."
 }

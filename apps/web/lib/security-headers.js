@@ -1,3 +1,5 @@
+import process from "node:process";
+
 export function getSecurityHeadersForRuntime(isProduction = process.env.NODE_ENV === "production") {
   const contentSecurityPolicy = [
     "default-src 'self'",

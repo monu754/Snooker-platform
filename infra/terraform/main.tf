@@ -11,22 +11,22 @@ locals {
   }
 
   secret_env_map = {
-    MONGODB_URI          = var.app_secret_arns.mongodb_uri
-    NEXTAUTH_SECRET      = var.app_secret_arns.nextauth_secret
-    GOOGLE_CLIENT_ID     = try(var.app_secret_arns.google_client_id, null)
-    GOOGLE_CLIENT_SECRET = try(var.app_secret_arns.google_client_secret, null)
-    PUSHER_APP_ID        = try(var.app_secret_arns.pusher_app_id, null)
-    PUSHER_SECRET        = try(var.app_secret_arns.pusher_secret, null)
+    MONGODB_URI                = var.app_secret_arns.mongodb_uri
+    NEXTAUTH_SECRET            = var.app_secret_arns.nextauth_secret
+    GOOGLE_CLIENT_ID           = try(var.app_secret_arns.google_client_id, null)
+    GOOGLE_CLIENT_SECRET       = try(var.app_secret_arns.google_client_secret, null)
+    PUSHER_APP_ID              = try(var.app_secret_arns.pusher_app_id, null)
+    PUSHER_SECRET              = try(var.app_secret_arns.pusher_secret, null)
     NEXT_PUBLIC_PUSHER_KEY     = try(var.app_secret_arns.pusher_key, null)
     NEXT_PUBLIC_PUSHER_CLUSTER = try(var.app_secret_arns.pusher_cluster, null)
-    SMTP_HOST            = try(var.app_secret_arns.smtp_host, null)
-    SMTP_PORT            = try(var.app_secret_arns.smtp_port, null)
-    SMTP_USER            = try(var.app_secret_arns.smtp_user, null)
-    SMTP_PASS            = try(var.app_secret_arns.smtp_pass, null)
-    SMTP_FROM            = try(var.app_secret_arns.smtp_from, null)
-    ALERT_WEBHOOK_URL    = try(var.app_secret_arns.alert_webhook_url, null)
-    BILLING_API_KEY      = try(var.app_secret_arns.billing_api_key, null)
-    VAPID_PRIVATE_KEY    = var.app_secret_arns.vapid_private_key
+    SMTP_HOST                  = try(var.app_secret_arns.smtp_host, null)
+    SMTP_PORT                  = try(var.app_secret_arns.smtp_port, null)
+    SMTP_USER                  = try(var.app_secret_arns.smtp_user, null)
+    SMTP_PASS                  = try(var.app_secret_arns.smtp_pass, null)
+    SMTP_FROM                  = try(var.app_secret_arns.smtp_from, null)
+    ALERT_WEBHOOK_URL          = try(var.app_secret_arns.alert_webhook_url, null)
+    BILLING_API_KEY            = try(var.app_secret_arns.billing_api_key, null)
+    VAPID_PRIVATE_KEY          = var.app_secret_arns.vapid_private_key
   }
 }
 

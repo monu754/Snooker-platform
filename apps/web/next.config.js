@@ -1,3 +1,4 @@
+import process from "node:process";
 import { getSecurityHeadersForRuntime } from "./lib/security-headers.js";
 
 /** @type {import('next').NextConfig} */
