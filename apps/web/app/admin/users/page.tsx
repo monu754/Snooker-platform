@@ -8,6 +8,7 @@ interface UserData {
   name: string;
   email: string;
   role: "admin" | "umpire" | "user";
+  subscriptionTier?: "free" | "plus" | "pro";
   createdAt: string;
 }
 
@@ -63,8 +64,30 @@ export default function UserManagerPage() {
       }
       
       setUsers((prev) => 
-        prev.map((user) => (user._id === userId ? { ...user, role: newRole as any } : user))
+        prev.map((user) => (user._id === userId ? { ...user, role: newRole as any, subscriptionTier: newRole === "user" ? user.subscriptionTier : "free" } : user))
       );
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const handleTierChange = async (userId: string, subscriptionTier: string) => {
+    setUpdatingId(userId);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subscriptionTier }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to update subscription tier");
+      }
+
+      setUsers((prev) => prev.map((user) => (user._id === userId ? { ...user, subscriptionTier: subscriptionTier as any } : user)));
     } catch (err: any) {
       alert(err.message);
     } finally {
@@ -149,13 +172,14 @@ export default function UserManagerPage() {
                 <th className="p-4 font-medium">Email</th>
                 <th className="p-4 font-medium">Joined</th>
                 <th className="p-4 font-medium">Role</th>
+                <th className="p-4 font-medium">Tier</th>
                 <th className="p-4 font-medium text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800/50">
               {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center text-zinc-500">
+                  <td colSpan={6} className="p-8 text-center text-zinc-500">
                     No {roleFilter === "all" ? "" : `${roleFilter} `}users found{searchTerm ? ` matching "${searchTerm}"` : ""}.
                   </td>
                 </tr>
@@ -191,6 +215,24 @@ export default function UserManagerPage() {
                         <option value="umpire" className="bg-[#18181b] text-white">Umpire</option>
                         <option value="admin" className="bg-[#18181b] text-white">Admin</option>
                       </select>
+                    </td>
+                    <td className="p-4">
+                      {user.role === "user" ? (
+                        <select
+                          value={user.subscriptionTier || "free"}
+                          onChange={(e) => handleTierChange(user._id, e.target.value)}
+                          disabled={updatingId === user._id}
+                          className="text-sm px-3 py-1.5 rounded-lg border bg-zinc-900 border-zinc-800 text-zinc-300 outline-none"
+                        >
+                          <option value="free" className="bg-[#18181b] text-white">Free</option>
+                          <option value="plus" className="bg-[#18181b] text-white">Plus</option>
+                          <option value="pro" className="bg-[#18181b] text-white">Pro</option>
+                        </select>
+                      ) : (
+                        <span className="inline-flex rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs font-medium text-zinc-500">
+                          Included in role access
+                        </span>
+                      )}
                     </td>
                     <td className="p-4 text-right">
                       <button 

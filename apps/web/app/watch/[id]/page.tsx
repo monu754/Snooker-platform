@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
 import { Activity, ChevronLeft, Circle, MessageSquare, PlayCircle, Trophy, Users } from "lucide-react";
 import { getPusherClient } from "../../../lib/pusher";
+import { readOfflineCache, writeOfflineCache } from "../../../lib/offline-cache";
 
 type EventLog = { id: string; time: string; player: "A" | "B" | "system"; action: string; points: string; type: "score" | "foul" | "system" };
 type MentionUser = { id: string; name: string; handle: string; role: string; image?: string };
@@ -17,6 +18,7 @@ export default function WatchPage() {
   const { data: session, status } = useSession();
   const params = useParams();
   const matchId = params.id as string;
+  const [hasMounted, setHasMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<"events" | "chat">("events");
   const [match, setMatch] = useState<any>(null);
   const [scoreA, setScoreA] = useState(0);
@@ -31,10 +33,17 @@ export default function WatchPage() {
   const [mentionSuggestions, setMentionSuggestions] = useState<MentionUser[]>([]);
   const [mentionQuery, setMentionQuery] = useState("");
   const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>([]);
+  const [showingOfflineSnapshot, setShowingOfflineSnapshot] = useState(false);
+  const [matchNotice, setMatchNotice] = useState("");
+  const [chatLoadNotice, setChatLoadNotice] = useState("");
   const viewerTokenRef = useRef<string | null>(null);
   const hasReleasedViewerRef = useRef(false);
-  const canModerateChat = ((session?.user as any)?.role || "") === "admin";
+  const canModerateChat = hasMounted && ((session?.user as any)?.role || "") === "admin";
   const formatLabel = getFormatLabel(match);
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
 
   const insertIntoChat = (token: string) => setChatInput((prev) => `${prev}${prev && !prev.endsWith(" ") ? " " : ""}${token} `);
 
@@ -45,10 +54,35 @@ export default function WatchPage() {
     setChatInput("");
     setMentionQuery("");
     setMentionSuggestions([]);
+    setChatNotice("");
     try {
-      await fetch(`/api/matches/${matchId}/chat`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
-    } catch (err) {
-      console.error("Failed to send message", err);
+      const res = await fetch(`/api/matches/${matchId}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok) {
+        return;
+      }
+
+      setChatInput(text);
+
+      if (res.status === 429) {
+        setChatNotice(data.error || "You are sending messages too quickly. Please wait a moment.");
+        return;
+      }
+
+      if (res.status === 400 || res.status === 401 || res.status === 403 || res.status === 503) {
+        setChatNotice(data.error || "Unable to send that message right now.");
+        return;
+      }
+
+      setChatNotice("Failed to send the message. Please try again.");
+    } catch {
+      setChatInput(text);
+      setChatNotice("Network error while sending the message. Please try again.");
     }
   };
 
@@ -83,7 +117,7 @@ export default function WatchPage() {
       }
 
       setChatNotice(data.error || "Failed to remove the message.");
-    } catch (err) {
+    } catch {
       setChatNotice("Network error while removing the message. Please try again.");
     } finally {
       setPendingDeleteIds((prev) => prev.filter((id) => id !== messageId));
@@ -134,7 +168,12 @@ export default function WatchPage() {
     window.addEventListener("beforeunload", handleUnload);
 
     fetch(`/api/matches/${matchId}`, { cache: "no-store" })
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error("Unable to load match");
+        }
+        return res.json();
+      })
       .then((data) => {
         if (data.match) {
           setMatch(data.match);
@@ -154,13 +193,62 @@ export default function WatchPage() {
             type: event.eventType === "foul" ? "foul" : event.eventType === "score_update" ? "score" : "system",
           })));
         }
+        writeOfflineCache(`snooker.offline.watch.${matchId}.summary`, data);
+        setShowingOfflineSnapshot(false);
+        setMatchNotice("");
       })
-      .catch((err) => console.error("Failed to load initial match data", err));
+      .catch(() => {
+        const cached = readOfflineCache<any>(`snooker.offline.watch.${matchId}.summary`, null);
+        if (cached?.match) {
+          setMatch(cached.match);
+          setScoreA(cached.match.scoreA || 0);
+          setScoreB(cached.match.scoreB || 0);
+          setStreamUrl(cached.match.streamUrl || null);
+          setActivePlayer(cached.match.activePlayer || "A");
+          setViewerCount(cached.match.viewers || 0);
+        }
+        if (cached?.events) {
+          setEvents(cached.events.map((event: any) => ({
+            id: event._id || Date.now().toString(),
+            time: new Date(event.createdAt || Date.now()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            player: event.player === "A" || event.player === "B" ? event.player : "system",
+            action: event.description,
+            points: event.eventType === "foul" ? `Opponent +${event.points}` : `+${event.points}`,
+            type: event.eventType === "foul" ? "foul" : event.eventType === "score_update" ? "score" : "system",
+          })));
+          setShowingOfflineSnapshot(true);
+          setMatchNotice("Live data could not be refreshed, so this match is being shown from the latest cached snapshot.");
+          return;
+        }
+
+        setMatchNotice("This match could not be loaded right now. Please refresh or try again shortly.");
+      });
 
     fetch(`/api/matches/${matchId}/chat`, { cache: "no-store" })
-      .then((res) => res.json())
-      .then((data) => { if (data.messages) setChatMessages(data.messages); })
-      .catch((err) => console.error("Failed to load chat", err));
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error("Unable to load chat");
+        }
+        return res.json();
+      })
+      .then((data) => {
+        if (data.messages) {
+          setChatMessages(data.messages);
+          writeOfflineCache(`snooker.offline.watch.${matchId}.chat`, data.messages);
+          setChatLoadNotice("");
+        }
+      })
+      .catch(() => {
+        const cachedMessages = readOfflineCache<any[]>(`snooker.offline.watch.${matchId}.chat`, []);
+        if (cachedMessages.length > 0) {
+          setChatMessages(cachedMessages);
+          setShowingOfflineSnapshot(true);
+          setChatLoadNotice("Chat is showing the latest cached messages because the live chat feed could not be refreshed.");
+          return;
+        }
+
+        setChatLoadNotice("Live chat messages could not be loaded right now.");
+      });
 
     const pusher = getPusherClient();
     const channel = pusher.subscribe(`match-${matchId}`);
@@ -224,7 +312,7 @@ export default function WatchPage() {
           </Link>
         </div>
         <div className="flex items-center gap-4">
-          {status === "loading" ? (
+          {!hasMounted || status === "loading" ? (
             <div className="w-8 h-8 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin"></div>
           ) : session ? (
             <div className="flex items-center gap-4">
@@ -247,6 +335,16 @@ export default function WatchPage() {
 
       <main className="flex-1 max-w-[1600px] w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-4 gap-6">
         <div className="lg:col-span-3 space-y-4">
+          {matchNotice && (
+            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-5 py-4 text-sm text-amber-200">
+              {matchNotice}
+            </div>
+          )}
+          {showingOfflineSnapshot && (
+            <div className="rounded-2xl border border-blue-500/20 bg-blue-500/10 px-5 py-4 text-sm text-blue-200">
+              You are viewing a cached match snapshot. Live scoring, viewer count, and chat updates will resume when connectivity returns.
+            </div>
+          )}
           <div className="flex items-center gap-2 text-zinc-400 mb-2">
             <Link href="/" className="hover:text-white transition-colors flex items-center text-sm"><ChevronLeft size={16} /> Back to Home</Link>
             <span>•</span>
@@ -285,6 +383,11 @@ export default function WatchPage() {
             ) : (
               <div className="flex flex-col h-full h-[500px] justify-between">
                 <div id="chat-container" className="space-y-4 overflow-y-auto flex-1 custom-scrollbar pr-2 pb-4">
+                  {chatLoadNotice && (
+                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+                      {chatLoadNotice}
+                    </div>
+                  )}
                   {chatMessages.length === 0 ? <p className="text-zinc-500 text-sm text-center mt-10">No messages yet. Be the first to say hello!</p> : chatMessages.map((msg) => (
                     <div key={msg._id} className="flex gap-3 text-sm group">
                       <div className="w-8 h-8 rounded-full bg-zinc-800 flex-shrink-0 overflow-hidden">
@@ -294,14 +397,14 @@ export default function WatchPage() {
                         <div className="flex items-baseline gap-2">
                           <span className="font-bold text-emerald-400">{msg.userName}</span>
                           <span className="text-[10px] text-zinc-600">{new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-                          {(canModerateChat || msg.userId === (session?.user as any)?.id) && <button type="button" disabled={pendingDeleteIds.includes(msg._id)} onClick={() => handleDeleteMessage(msg._id)} className="ml-auto text-[10px] uppercase tracking-wider text-zinc-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-100 disabled:text-zinc-500">{pendingDeleteIds.includes(msg._id) ? "Removing..." : "Remove"}</button>}
+                          {(hasMounted && (canModerateChat || msg.userId === (session?.user as any)?.id)) && <button type="button" disabled={pendingDeleteIds.includes(msg._id)} onClick={() => handleDeleteMessage(msg._id)} className="ml-auto text-[10px] uppercase tracking-wider text-zinc-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-100 disabled:text-zinc-500">{pendingDeleteIds.includes(msg._id) ? "Removing..." : "Remove"}</button>}
                         </div>
                         <p className="text-zinc-300 mt-0.5">{renderChatText(msg.text)}</p>
                       </div>
                     </div>
                   ))}
                 </div>
-                {session ? (
+                {hasMounted && session ? (
                   <form onSubmit={handleSendMessage} className="mt-4">
                     {chatNotice && (
                       <div className="mb-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
@@ -330,10 +433,12 @@ export default function WatchPage() {
                       </div>
                     )}
                     <div className="relative">
-                      <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder="Comment on the action... Use @user_name to mention anyone." className="w-full bg-zinc-950 border border-zinc-800 rounded-full pl-4 pr-14 py-3 text-sm text-white focus:border-emerald-500 transition-colors outline-none" />
+                      <input type="text" value={chatInput} maxLength={500} onChange={(e) => { setChatInput(e.target.value); if (chatNotice) setChatNotice(""); }} placeholder="Comment on the action... Use @user_name to mention anyone." className="w-full bg-zinc-950 border border-zinc-800 rounded-full pl-4 pr-14 py-3 text-sm text-white focus:border-emerald-500 transition-colors outline-none" />
                       <button type="submit" disabled={!chatInput.trim()} className="absolute right-2 top-1/2 -translate-y-1/2 h-9 w-9 rounded-full bg-emerald-600 disabled:bg-zinc-700 disabled:text-zinc-500 flex items-center justify-center text-white hover:bg-emerald-500 transition-colors cursor-pointer"><PlayCircle size={14} className="ml-0.5" /></button>
                     </div>
                   </form>
+                ) : !hasMounted || status === "loading" ? (
+                  <div className="mt-4 bg-zinc-950 border border-zinc-800 rounded-xl p-4 text-center"><p className="text-sm text-zinc-400">Loading chat access...</p></div>
                 ) : (
                   <div className="mt-4 bg-zinc-950 border border-zinc-800 rounded-xl p-4 text-center"><p className="text-sm text-zinc-400 mb-3">Sign in to participate in the live chat.</p></div>
                 )}

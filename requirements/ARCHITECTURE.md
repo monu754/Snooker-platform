@@ -36,3 +36,14 @@ The project is organized into `apps` and `packages`:
 - Password hashing using `bcryptjs`.
 - CSRF protection via NextAuth.
 - API route protection using `getServerSession`.
+
+## Operational Readiness
+
+- **Health Checks**: `GET /api/health` verifies application and database readiness.
+- **Metrics**: `GET /api/metrics` exposes Prometheus-style counters and histograms, while `/admin/observability` renders a simple operational dashboard.
+- **Structured Logging**: `apps/web/lib/logger.ts` emits JSON logs for info, warnings, and errors.
+- **Alert Hooks**: warning/error logs can fan out to `ALERT_WEBHOOK_URL` for incident routing.
+- **Upload Storage Modes**: uploads support `local`, `external`, and `object` storage integrations.
+- **Billing Integration**: premium checkout uses a configurable external checkout endpoint, while admin and umpire accounts stay role-based and bypass premium plans.
+- **Local Deployment**: root `docker-compose.yml` provides an app + MongoDB stack for reproducible local and server deployment.
+- **Cloud IaC**: `infra/terraform` provides an AWS baseline for VPC, ALB, ECS Fargate, logs, dashboard wiring, and secrets-based runtime configuration.

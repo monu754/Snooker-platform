@@ -5,6 +5,7 @@ import dbConnect from "../../../../lib/mongodb";
 import Match from "../../../../lib/models/Match";
 import User from "../../../../lib/models/User";
 import Event from "../../../../lib/models/Event";
+import { logError } from "../../../../lib/logger";
 import { normalizeViewerSessions } from "../../../../lib/viewer-presence";
 
 export async function GET() {
@@ -51,8 +52,8 @@ export async function GET() {
       recentEvents: recentEvents
     }, { status: 200 });
 
-  } catch (error: any) {
-    console.error("Admin Dashboard API Error:", error);
+  } catch (error) {
+    logError("admin.dashboard.fetch_failed", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

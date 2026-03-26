@@ -4,6 +4,7 @@ import { authOptions } from "../../../../lib/auth";
 import { logError } from "../../../../lib/logger";
 import Settings from "../../../../lib/models/Settings";
 import { jsonError } from "../../../../lib/request";
+import { enforceTrustedOrigin } from "../../../../lib/security";
 import { ensureSettingsDocument } from "../../../../lib/settings";
 import { ValidationError, validateSettingsInput } from "../../../../lib/validation";
 import { pusherServer } from "../../../../lib/pusher";
@@ -31,6 +32,11 @@ export async function GET() {
 
 export async function PATCH(req: Request) {
   try {
+    const trustedOriginResponse = enforceTrustedOrigin(req);
+    if (trustedOriginResponse) {
+      return trustedOriginResponse;
+    }
+
     const session = await getServerSession(authOptions);
     if (!session || (session.user as any).role !== "admin") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

@@ -12,6 +12,7 @@ Snooker Stream is a comprehensive solution for managing snooker tournaments, fro
 ### 🛠 Admin Dashboard
 - **Match Management**: Create, edit, and delete matches.
 - **Player & User Management**: Control access levels and player profiles.
+- **Premium Viewer Plans**: Viewer accounts can upgrade to Plus or Pro, while admin and umpire accounts stay role-based.
 - **Real-time Overview**: Monitor all active frames and scores.
 - **Match History**: Track past results with automated winner determination.
 - **Refined Activity Feed**: High-level administrative audit log (Logins, Match Deletions, User Updates) filtered specifically for admins.
@@ -31,6 +32,7 @@ Snooker Stream is a comprehensive solution for managing snooker tournaments, fro
 - **Completed Matches**: History section showing the last 20 finished games.
 - **Real-time Sync**: Watch scores and events update instantly without refresh.
 - **Winner Highlights**: Visual distinction for match winners with trophy icons.
+- **Premium Upgrades**: Viewer profile supports paid-plan checkout integration for premium viewing features.
 
 ### 📢 Platform Announcements
 - **Global Banner**: Admins can broadcast real-time messages to all active users.
@@ -47,6 +49,7 @@ Snooker Stream is a comprehensive solution for managing snooker tournaments, fro
 - **Styling**: [Tailwind CSS 4](https://tailwindcss.com/)
 - **Icons**: [Lucide React](https://lucide.dev/)
 - **Language**: TypeScript
+- **Operations**: GitHub Actions CI, Docker, Docker Compose
 
 ## 📁 Project Structure
 
@@ -150,6 +153,16 @@ pnpm dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+### Optional: Run With Docker Compose
+
+From the project root:
+
+```bash
+docker compose up --build
+```
+
+This starts MongoDB and the web app together for a reproducible local deployment flow.
 
 ## 🗃 Database Schema
 

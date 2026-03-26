@@ -1,8 +1,21 @@
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { logInfo } from "./logger";
+import {
+  getConfiguredUploadStorageMode,
+  getUploadConfigurationIssues,
+  isLocalUploadAllowedInProduction,
+  isProductionRuntime,
+} from "./runtime-config";
 
 const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"];
+const fileExtensionByMimeType: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/gif": "gif",
+  "image/avif": "avif",
+};
 
 function assertImage(file: File) {
   if (!allowedTypes.includes(file.type)) {
@@ -15,7 +28,11 @@ function assertImage(file: File) {
 }
 
 async function storeLocally(file: File) {
-  const ext = file.name.split(".").pop() || "jpg";
+  if (isProductionRuntime() && !isLocalUploadAllowedInProduction()) {
+    throw new Error("Local disk uploads are disabled in production. Configure object/external storage first.");
+  }
+
+  const ext = fileExtensionByMimeType[file.type] || "jpg";
   const filename = `match-thumb-${Date.now()}.${ext}`;
   const uploadsDir = path.join(process.cwd(), "public", "uploads");
 
@@ -32,9 +49,14 @@ async function storeLocally(file: File) {
 }
 
 async function storeViaExternalUploader(file: File) {
-  const endpoint = process.env.UPLOAD_EXTERNAL_ENDPOINT;
-  const publicBaseUrl = process.env.UPLOAD_EXTERNAL_PUBLIC_BASE_URL;
+  const issues = getUploadConfigurationIssues();
+  if (issues.length > 0) {
+    throw new Error(issues[0]);
+  }
 
+  const endpoint = process.env.UPLOAD_OBJECT_ENDPOINT || process.env.UPLOAD_EXTERNAL_ENDPOINT;
+  const publicBaseUrl =
+    process.env.UPLOAD_OBJECT_PUBLIC_BASE_URL || process.env.UPLOAD_EXTERNAL_PUBLIC_BASE_URL;
   if (!endpoint || !publicBaseUrl) {
     throw new Error("External upload storage is not configured.");
   }
@@ -72,8 +94,8 @@ async function storeViaExternalUploader(file: File) {
 export async function storeUploadedImage(file: File) {
   assertImage(file);
 
-  const mode = process.env.UPLOAD_STORAGE_MODE === "external" ? "external" : "local";
-  const stored = mode === "external" ? await storeViaExternalUploader(file) : await storeLocally(file);
+  const mode = getConfiguredUploadStorageMode();
+  const stored = mode === "local" ? await storeLocally(file) : await storeViaExternalUploader(file);
 
   logInfo("upload.completed", {
     storageMode: stored.storageMode,

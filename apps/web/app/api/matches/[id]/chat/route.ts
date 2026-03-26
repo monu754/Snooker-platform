@@ -8,8 +8,10 @@ import ChatMessage from "../../../../../lib/models/ChatMessage";
 import { pusherServer } from "../../../../../lib/pusher";
 import { logError } from "../../../../../lib/logger";
 import { applyRateLimit, jsonError } from "../../../../../lib/request";
+import { enforceTrustedOrigin } from "../../../../../lib/security";
 import { isMaintenanceModeEnabled } from "../../../../../lib/settings";
-import { ValidationError, validateChatMessageInput } from "../../../../../lib/validation";
+import { sanitizeChatText } from "../../../../../lib/chat-moderation";
+import { ValidationError, runPostChatMessageWorkflow } from "../../../../../lib/workflows/chat";
 
 export async function GET(req: Request, props: { params: Promise<{ id: string }> }) {
   try {
@@ -22,22 +24,27 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
       .limit(50)
       .lean();
       
-    return NextResponse.json({ success: true, messages: messages.reverse() }, { status: 200 });
-  } catch (error) {
+    return NextResponse.json({
+      success: true,
+      messages: messages
+        .reverse()
+        .map((message: any) => ({ ...message, text: sanitizeChatText(message.text || "") })),
+    }, { status: 200 });
+  } catch {
     return NextResponse.json({ error: "Server Error" }, { status: 500 });
   }
 }
 
 export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
   try {
+    const trustedOriginResponse = enforceTrustedOrigin(req);
+    if (trustedOriginResponse) {
+      return trustedOriginResponse;
+    }
+
     const maintenanceMode = await isMaintenanceModeEnabled();
     if (maintenanceMode) {
       return jsonError("Live chat is temporarily unavailable during maintenance mode.", 503);
-    }
-
-    const rateLimitResponse = applyRateLimit(req, "chat:post", 12, 30_000);
-    if (rateLimitResponse) {
-      return rateLimitResponse;
     }
 
     await dbConnect();
@@ -48,30 +55,26 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { text } = validateChatMessageInput(await req.json());
+    const rateLimitResponse = await applyRateLimit(
+      req,
+      "chat:post",
+      12,
+      30_000,
+      (session.user as any).id || session.user.email || "anonymous",
+    );
+    if (rateLimitResponse) {
+      return rateLimitResponse;
+    }
 
-    const newMessage = await ChatMessage.create({
-      matchId: params.id,
-      userId: (session.user as any).id,
-      userName: session.user.name || "Anonymous",
-      userImage: session.user.image,
-      text: text.trim()
+    const result = await runPostChatMessageWorkflow(await req.json(), params.id, session.user as any, {
+      createMessage: (input) => ChatMessage.create(input),
+      deleteMessage: async () => undefined,
+      trigger: async (matchId, eventName, payload) => {
+        await pusherServer.trigger(`match-${matchId}`, eventName, payload);
+      },
     });
 
-    const msgData = {
-      _id: newMessage._id.toString(),
-      matchId: params.id,
-      userId: newMessage.userId.toString(),
-      userName: newMessage.userName,
-      userImage: newMessage.userImage,
-      text: newMessage.text,
-      createdAt: newMessage.createdAt
-    };
-
-    // Broadcast to the channel match-{id}
-    await pusherServer.trigger(`match-${params.id}`, "new-chat-message", msgData);
-
-    return NextResponse.json({ success: true, message: msgData }, { status: 201 });
+    return NextResponse.json(result.body, { status: result.status });
   } catch (error) {
     if (error instanceof ValidationError) {
       return jsonError(error.message, 400);

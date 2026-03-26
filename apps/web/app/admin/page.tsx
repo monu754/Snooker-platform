@@ -16,12 +16,12 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-const fetchDashboardData = async () => {
+  const fetchDashboardData = async () => {
     try {
-      // Force bypass cache
-      const res = await fetch("/api/admin/dashboard", { cache: "no-store" }); 
+      const res = await fetch("/api/admin/dashboard", { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load dashboard data");
       const json = await res.json();
+      setError("");
       setData(json);
     } catch (err: any) {
       setError(err.message);
@@ -64,28 +64,52 @@ const fetchDashboardData = async () => {
 
   const handleDeleteMatch = async (id: string) => {
     if (!window.confirm("System Admin: Delete this match permanently?")) return;
-    await fetch(`/api/matches/${id}`, { method: 'DELETE' });
-    fetchDashboardData();
+    try {
+      const res = await fetch(`/api/matches/${id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to delete match");
+      }
+      fetchDashboardData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete match");
+    }
   };
 
   const handleForceStart = async (id: string) => {
     if (!window.confirm("Start/Resume this match now?")) return;
-    await fetch(`/api/matches/${id}`, { 
-      method: "PATCH", 
-      headers: { "Content-Type": "application/json" }, 
-      body: JSON.stringify({ status: "live" }) 
-    });
-    fetchDashboardData();
+    try {
+      const res = await fetch(`/api/matches/${id}`, { 
+        method: "PATCH", 
+        headers: { "Content-Type": "application/json" }, 
+        body: JSON.stringify({ status: "live" }) 
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to update match status");
+      }
+      fetchDashboardData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update match status");
+    }
   };
 
   const handleForcePause = async (id: string) => {
     if (!window.confirm("Pause this live match?")) return;
-    await fetch(`/api/matches/${id}`, { 
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "paused" }) 
-    });
-    fetchDashboardData();
+    try {
+      const res = await fetch(`/api/matches/${id}`, { 
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "paused" }) 
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to pause match");
+      }
+      fetchDashboardData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to pause match");
+    }
   };
   
   const handleClearLogs = async () => {
@@ -98,8 +122,8 @@ const fetchDashboardData = async () => {
     }
   };
 
-  if (loading) return <DashboardSkeleton />;
-  if (error) return <div className="p-8 text-red-500 flex items-center gap-2"><AlertCircle /> {error}</div>;
+  if (loading && !data) return <DashboardSkeleton />;
+  if (error && !data) return <div className="p-8 text-red-500 flex items-center gap-2"><AlertCircle /> {error}</div>;
   if (!data) return null;
 
   // --- SMART SORTING LOGIC ---
@@ -118,6 +142,13 @@ const fetchDashboardData = async () => {
 
   return (
     <div className="p-4 md:p-8 font-sans">
+      {error && (
+        <div className="mb-6 flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+          <AlertCircle size={16} />
+          <span>{error}</span>
+        </div>
+      )}
+
       <header className="mb-8 flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white mb-1">Overview</h1>

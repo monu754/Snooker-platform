@@ -3,6 +3,9 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../../../lib/auth"; 
 import dbConnect from "../../../../lib/mongodb"; 
 import Event from "../../../../lib/models/Event"; 
+import { logError } from "../../../../lib/logger";
+import { applyRateLimit } from "../../../../lib/request";
+import { enforceTrustedOrigin } from "../../../../lib/security";
 
 // GET: Fetch ALL system events
 export async function GET() {
@@ -19,14 +22,24 @@ export async function GET() {
 
     return NextResponse.json({ success: true, events }, { status: 200 });
   } catch (error) {
-    console.error("Failed to fetch events:", error);
+    logError("admin.events.fetch_failed", error);
     return NextResponse.json({ error: "Server Error" }, { status: 500 });
   }
 }
 
-// DELETE: Clear all system events (You already had this)
-export async function DELETE() {
+// DELETE: Clear all system events
+export async function DELETE(req: Request) {
   try {
+    const trustedOriginResponse = enforceTrustedOrigin(req);
+    if (trustedOriginResponse) {
+      return trustedOriginResponse;
+    }
+
+    const rateLimitResponse = await applyRateLimit(req, "admin:events:clear", 5, 60_000);
+    if (rateLimitResponse) {
+      return rateLimitResponse;
+    }
+
     await dbConnect();
     
     const session = await getServerSession(authOptions);
@@ -38,7 +51,7 @@ export async function DELETE() {
 
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (error) {
-    console.error("Failed to clear events:", error);
+    logError("admin.events.clear_failed", error);
     return NextResponse.json({ error: "Server Error" }, { status: 500 });
   }
 }

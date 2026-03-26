@@ -18,7 +18,7 @@ function toMentionHandle(name: string, email: string) {
 
 export async function GET(req: Request) {
   try {
-    const rateLimitResponse = applyRateLimit(req, "mentions:search", 60, 60_000);
+    const rateLimitResponse = await applyRateLimit(req, "mentions:search", 60, 60_000);
     if (rateLimitResponse) {
       return rateLimitResponse;
     }

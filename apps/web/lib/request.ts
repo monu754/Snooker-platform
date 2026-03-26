@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { consumeRateLimit } from "./rate-limit";
+import { incrementMetric } from "./metrics.ts";
 
 export function getClientIp(req: Request) {
   const forwardedFor = req.headers.get("x-forwarded-for");
@@ -14,7 +15,7 @@ export function jsonError(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status });
 }
 
-export function applyRateLimit(
+export async function applyRateLimit(
   req: Request,
   namespace: string,
   limit: number,
@@ -22,15 +23,19 @@ export function applyRateLimit(
   suffix = "",
 ) {
   const ip = getClientIp(req);
-  const result = consumeRateLimit({
+  const result = await consumeRateLimit({
     key: `${namespace}:${ip}:${suffix}`,
     limit,
     windowMs,
   });
 
+  incrementMetric(`rate_limit_checks_total.${result.driver}.${namespace}.${result.allowed ? "allowed" : "blocked"}`);
+
   if (result.allowed) {
     return null;
   }
+
+  incrementMetric(`rate_limit_hits_total.${namespace}`);
 
   return NextResponse.json(
     {
@@ -41,6 +46,8 @@ export function applyRateLimit(
       status: 429,
       headers: {
         "Retry-After": `${Math.max(Math.ceil((result.resetAt - Date.now()) / 1000), 1)}`,
+        "X-RateLimit-Driver": result.driver,
+        "X-RateLimit-Namespace": namespace,
       },
     },
   );

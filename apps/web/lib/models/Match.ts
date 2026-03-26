@@ -11,6 +11,8 @@ export interface IMatch extends Document {
   venue?: string;
   umpireId?: string;
   streamUrl?: string;
+  secondaryStreamUrls?: string[];
+  vodUrl?: string;
   thumbnailUrl?: string;
   status: "scheduled" | "live" | "paused" | "finished";
   viewers: number;
@@ -18,6 +20,7 @@ export interface IMatch extends Document {
     token: string;
     lastSeenAt: Date;
   }>;
+  favoriteAlertUserIds: string[];
   activePlayer?: "A" | "B";
 
   // --- NEW SCORING FIELDS ---
@@ -41,6 +44,8 @@ const MatchSchema: Schema = new Schema(
     venue: { type: String },
     umpireId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     streamUrl: { type: String },
+    secondaryStreamUrls: { type: [String], default: [] },
+    vodUrl: { type: String },
     thumbnailUrl: { type: String },
     status: { type: String, enum: ["scheduled", "live", "paused", "finished"], default: "scheduled" },
     viewers: { type: Number, default: 0 },
@@ -54,6 +59,11 @@ const MatchSchema: Schema = new Schema(
           { _id: false },
         ),
       ],
+      default: [],
+      select: false,
+    },
+    favoriteAlertUserIds: {
+      type: [String],
       default: [],
       select: false,
     },

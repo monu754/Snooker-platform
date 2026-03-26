@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../../../lib/auth";
 import dbConnect from "../../../../lib/mongodb";
 import Match from "../../../../lib/models/Match";
+import { logError } from "../../../../lib/logger";
 
 export async function GET() {
   try {
@@ -21,7 +22,7 @@ export async function GET() {
 
     return NextResponse.json({ success: true, matches }, { status: 200 });
   } catch (error) {
-    console.error("Failed to fetch umpire matches:", error);
+    logError("umpire.matches.fetch_failed", error);
     return NextResponse.json({ error: "Server Error" }, { status: 500 });
   }
 }

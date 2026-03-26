@@ -12,7 +12,7 @@ export default function UmpireDashboard() {
   const [matches, setMatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const [currentTimeMs, setCurrentTimeMs] = useState<number | null>(null);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -28,7 +28,7 @@ export default function UmpireDashboard() {
             if (data.error) throw new Error(data.error);
             setMatches(data.matches || []);
             setLoading(false);
-            setCurrentTime(new Date()); // Update the current time every fetch
+            setCurrentTimeMs(Date.now());
           })
           .catch((err) => {
             setError(err.message);
@@ -83,7 +83,7 @@ export default function UmpireDashboard() {
         ) : (
           sortedMatches.map((match) => {
             // SECURITY CHECK: Can the umpire open the panel?
-            const isPastScheduledTime = currentTime.getTime() >= new Date(match.scheduledTime).getTime();
+            const isPastScheduledTime = currentTimeMs !== null && currentTimeMs >= new Date(match.scheduledTime).getTime();
             const canStart = match.status === 'live' || match.status === 'paused' || (match.status === 'scheduled' && isPastScheduledTime);
 
             return (

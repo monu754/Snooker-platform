@@ -1,15 +1,12 @@
+import { SUBSCRIPTION_TIERS, normalizeSubscriptionTier } from "./subscriptions.ts";
+import { schemaRules } from "./schemas.ts";
+
 export class ValidationError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "ValidationError";
   }
 }
-
-const BLOCKED_CHAT_PATTERNS = [
-  /\b(?:fag|faggot|dyke|retard(?:ed)?|nigg(?:a|er)|kike|spic|chink|paki)\b/i,
-  /\b(?:kill yourself|kys|go die|heil hitler|white power)\b/i,
-  /\b(?:rape you|rapist|slut|whore|bitch)\b/i,
-];
 
 function hasExcessiveSpam(text: string) {
   if (/(.)\1{7,}/i.test(text)) {
@@ -31,10 +28,6 @@ function hasExcessiveSpam(text: string) {
 }
 
 function assertSafeChatMessage(text: string) {
-  if (BLOCKED_CHAT_PATTERNS.some((pattern) => pattern.test(text))) {
-    throw new ValidationError("Message contains abusive or hateful content");
-  }
-
   if (hasExcessiveSpam(text)) {
     throw new ValidationError("Message looks like spam");
   }
@@ -98,7 +91,7 @@ function optionalUrl(value: unknown, label: string) {
     return "";
   }
 
-  const normalized = requireTrimmedString(value, label, { maxLength: 500 });
+  const normalized = requireTrimmedString(value, label, { maxLength: schemaRules.match.urlMaxLength });
 
   try {
     const url = new URL(normalized);
@@ -112,12 +105,26 @@ function optionalUrl(value: unknown, label: string) {
   return normalized;
 }
 
+function optionalUrlArray(value: unknown, label: string, maxItems = schemaRules.match.secondaryStreamMaxItems) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .slice(0, maxItems)
+    .map((entry) => optionalUrl(entry, label))
+    .filter(Boolean);
+}
+
 export function validateRegistrationInput(input: unknown) {
   const payload = (input ?? {}) as Record<string, unknown>;
 
-  const name = requireTrimmedString(payload.name, "Name", { maxLength: 80 });
-  const email = requireTrimmedString(payload.email, "Email", { maxLength: 120 }).toLowerCase();
-  const password = requireTrimmedString(payload.password, "Password", { minLength: 8, maxLength: 128 });
+  const name = requireTrimmedString(payload.name, "Name", { maxLength: schemaRules.registration.nameMaxLength });
+  const email = requireTrimmedString(payload.email, "Email", { maxLength: schemaRules.registration.emailMaxLength }).toLowerCase();
+  const password = requireTrimmedString(payload.password, "Password", {
+    minLength: schemaRules.registration.passwordMinLength,
+    maxLength: schemaRules.registration.passwordMaxLength,
+  });
 
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     throw new ValidationError("Email must be valid");
@@ -129,16 +136,48 @@ export function validateRegistrationInput(input: unknown) {
 export function validateProfileUpdateInput(input: unknown) {
   const payload = (input ?? {}) as Record<string, unknown>;
 
-  const name = payload.name ? requireTrimmedString(payload.name, "Name", { maxLength: 80 }) : undefined;
+  const name = payload.name
+    ? requireTrimmedString(payload.name, "Name", { maxLength: schemaRules.registration.nameMaxLength })
+    : undefined;
   const password = payload.password
-    ? requireTrimmedString(payload.password, "Password", { minLength: 8, maxLength: 128 })
+    ? requireTrimmedString(payload.password, "Password", {
+        minLength: schemaRules.registration.passwordMinLength,
+        maxLength: schemaRules.registration.passwordMaxLength,
+      })
+    : undefined;
+  const subscriptionTier =
+    payload.subscriptionTier !== undefined
+      ? requireEnum(payload.subscriptionTier, "Subscription tier", SUBSCRIPTION_TIERS)
+      : undefined;
+  const favoritePlayers = Array.isArray(payload.favoritePlayers)
+    ? payload.favoritePlayers
+        .map((player) =>
+          requireTrimmedString(player, "Favorite player", { maxLength: schemaRules.profile.favoritePlayerMaxLength }),
+        )
+        .slice(0, schemaRules.profile.favoritePlayersMaxItems)
     : undefined;
 
-  if (!name && !password) {
+  if (!name && !password && !subscriptionTier && !favoritePlayers) {
     throw new ValidationError("Nothing to update");
   }
 
-  return { name, password };
+  return { name, password, subscriptionTier, favoritePlayers };
+}
+
+export function validatePlayerProfileInput(input: unknown) {
+  const payload = (input ?? {}) as Record<string, unknown>;
+
+  const name = requireTrimmedString(payload.name, "Player name", { maxLength: schemaRules.playerProfile.nameMaxLength });
+  const country =
+    payload.country === undefined ? "" : optionalTrimmedString(payload.country, { maxLength: schemaRules.playerProfile.countryMaxLength });
+  const bio = payload.bio === undefined ? "" : optionalTrimmedString(payload.bio, { maxLength: schemaRules.playerProfile.bioMaxLength });
+
+  let rank: number | undefined;
+  if (payload.rank !== undefined && payload.rank !== null && payload.rank !== "") {
+    rank = requirePositiveNumber(payload.rank, "Rank");
+  }
+
+  return { name, country, rank, bio };
 }
 
 export function validateSettingsInput(input: unknown) {
@@ -150,7 +189,7 @@ export function validateSettingsInput(input: unknown) {
     globalAnnouncement:
       payload.globalAnnouncement === undefined || payload.globalAnnouncement === null
         ? ""
-        : optionalTrimmedString(payload.globalAnnouncement, { maxLength: 280 }),
+        : optionalTrimmedString(payload.globalAnnouncement, { maxLength: schemaRules.settings.announcementMaxLength }),
   };
 }
 
@@ -166,14 +205,16 @@ export function validateMatchInput(input: unknown) {
   }
 
   return {
-    title: requireTrimmedString(payload.title, "Title", { maxLength: 140 }),
-    playerA: requireTrimmedString(payload.playerA, "Player A", { maxLength: 80 }),
-    playerB: requireTrimmedString(payload.playerB, "Player B", { maxLength: 80 }),
-    format: requireTrimmedString(payload.format, "Format", { maxLength: 40 }),
+    title: requireTrimmedString(payload.title, "Title", { maxLength: schemaRules.match.titleMaxLength }),
+    playerA: requireTrimmedString(payload.playerA, "Player A", { maxLength: schemaRules.match.playerNameMaxLength }),
+    playerB: requireTrimmedString(payload.playerB, "Player B", { maxLength: schemaRules.match.playerNameMaxLength }),
+    format: requireTrimmedString(payload.format, "Format", { maxLength: schemaRules.match.formatMaxLength }),
     totalFrames,
     scheduledTime: date,
-    venue: requireTrimmedString(payload.venue, "Venue", { maxLength: 120 }),
+    venue: requireTrimmedString(payload.venue, "Venue", { maxLength: schemaRules.match.venueMaxLength }),
     streamUrl: optionalUrl(payload.streamUrl, "Stream URL"),
+    secondaryStreamUrls: optionalUrlArray(payload.secondaryStreamUrls, "Secondary Stream URL"),
+    vodUrl: optionalUrl(payload.vodUrl, "VOD URL"),
     thumbnailUrl: optionalUrl(payload.thumbnailUrl, "Thumbnail URL"),
     umpireId:
       payload.umpireId && typeof payload.umpireId === "string" ? payload.umpireId.trim() : "",
@@ -194,27 +235,35 @@ export function validateMatchPatchInput(input: unknown) {
   }
 
   if (payload.playerA !== undefined) {
-    updates.playerA = requireTrimmedString(payload.playerA, "Player A", { maxLength: 80 });
+    updates.playerA = requireTrimmedString(payload.playerA, "Player A", { maxLength: schemaRules.match.playerNameMaxLength });
   }
 
   if (payload.playerB !== undefined) {
-    updates.playerB = requireTrimmedString(payload.playerB, "Player B", { maxLength: 80 });
+    updates.playerB = requireTrimmedString(payload.playerB, "Player B", { maxLength: schemaRules.match.playerNameMaxLength });
   }
 
   if (payload.title !== undefined) {
-    updates.title = requireTrimmedString(payload.title, "Title", { maxLength: 140 });
+    updates.title = requireTrimmedString(payload.title, "Title", { maxLength: schemaRules.match.titleMaxLength });
   }
 
   if (payload.format !== undefined) {
-    updates.format = requireTrimmedString(payload.format, "Format", { maxLength: 40 });
+    updates.format = requireTrimmedString(payload.format, "Format", { maxLength: schemaRules.match.formatMaxLength });
   }
 
   if (payload.venue !== undefined) {
-    updates.venue = requireTrimmedString(payload.venue, "Venue", { maxLength: 120 });
+    updates.venue = requireTrimmedString(payload.venue, "Venue", { maxLength: schemaRules.match.venueMaxLength });
   }
 
   if (payload.streamUrl !== undefined) {
     updates.streamUrl = optionalUrl(payload.streamUrl, "Stream URL");
+  }
+
+  if (payload.secondaryStreamUrls !== undefined) {
+    updates.secondaryStreamUrls = optionalUrlArray(payload.secondaryStreamUrls, "Secondary Stream URL");
+  }
+
+  if (payload.vodUrl !== undefined) {
+    updates.vodUrl = optionalUrl(payload.vodUrl, "VOD URL");
   }
 
   if (payload.thumbnailUrl !== undefined) {
@@ -247,7 +296,7 @@ export function validateMatchPatchInput(input: unknown) {
   }
 
   if (payload.winner !== undefined) {
-    updates.winner = optionalTrimmedString(payload.winner, { maxLength: 80 });
+    updates.winner = optionalTrimmedString(payload.winner, { maxLength: schemaRules.match.playerNameMaxLength });
   }
 
   if (payload.undoEventId !== undefined) {
@@ -277,7 +326,7 @@ export function validateMatchPatchInput(input: unknown) {
 
 export function validateChatMessageInput(input: unknown) {
   const payload = (input ?? {}) as Record<string, unknown>;
-  const text = requireTrimmedString(payload.text, "Message", { maxLength: 500 });
+  const text = requireTrimmedString(payload.text, "Message", { maxLength: schemaRules.chat.maxLength });
   assertSafeChatMessage(text);
   return { text };
 }
@@ -290,6 +339,17 @@ export function validateUmpireCreationInput(input: unknown) {
 export function validateUserRoleInput(input: unknown) {
   const payload = (input ?? {}) as Record<string, unknown>;
   return {
-    role: requireEnum(payload.role, "Role", ["admin", "umpire", "user"]),
+    role: payload.role !== undefined ? requireEnum(payload.role, "Role", ["admin", "umpire", "user"]) : undefined,
+    subscriptionTier:
+      payload.subscriptionTier !== undefined
+        ? normalizeSubscriptionTier(payload.subscriptionTier)
+        : undefined,
+  };
+}
+
+export function validateSubscriptionCheckoutInput(input: unknown) {
+  const payload = (input ?? {}) as Record<string, unknown>;
+  return {
+    tier: requireEnum(payload.tier, "Subscription tier", schemaRules.subscriptionCheckout.allowedTiers),
   };
 }

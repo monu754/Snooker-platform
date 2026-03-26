@@ -5,10 +5,17 @@ import dbConnect from "../../../../lib/mongodb";
 import Match from "../../../../lib/models/Match";
 import Event from "../../../../lib/models/Event";
 import { pusherServer } from "../../../../lib/pusher";
+import { logError } from "../../../../lib/logger";
+import { enforceTrustedOrigin } from "../../../../lib/security";
+import { runScoreUpdateWorkflow } from "../../../../lib/workflows/umpire-scoring";
 
 export async function POST(req: Request) {
   try {
-    // ✅ SECURITY: Require authenticated session
+    const trustedOriginResponse = enforceTrustedOrigin(req);
+    if (trustedOriginResponse) {
+      return trustedOriginResponse;
+    }
+
     const session = await getServerSession(authOptions);
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -17,52 +24,23 @@ export async function POST(req: Request) {
     const user = session.user as any;
     const role = user?.role;
 
-    // ✅ SECURITY: Only umpires can update scores
     if (role !== "umpire") {
       return NextResponse.json({ error: "Forbidden: Only umpires can update scores" }, { status: 403 });
     }
 
     await dbConnect();
 
-    const body = await req.json();
-    const { matchId, player, points, frameNumber, actionDescription } = body;
-
-    if (!matchId || !player || points === undefined || !frameNumber) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
-    }
-
-    if (role === "umpire") {
-      const match = await Match.findById(matchId).lean() as any;
-      if (!match) {
-        return NextResponse.json({ error: "Match not found" }, { status: 404 });
-      }
-      if (match.umpireId?.toString() !== user.id) {
-        return NextResponse.json({ error: "Forbidden: You are not the umpire for this match" }, { status: 403 });
-      }
-    }
-
-    // 1. Save to Database
-    const newEvent = await Event.create({
-      matchId,
-      frameNumber,
-      player,
-      eventType: "score_update",
-      points,
-      description: actionDescription,
+    const result = await runScoreUpdateWorkflow(await req.json(), user, {
+      findMatch: async (matchId) => Match.findById(matchId).lean() as any,
+      createEvent: (input) => Event.create(input),
+      trigger: async (matchId, eventName, payload) => {
+        await pusherServer.trigger(`match-${matchId}`, eventName, payload);
+      },
     });
 
-    // 2. BROADCAST THE EVENT TO ALL VIEWERS
-    await pusherServer.trigger(`match-${matchId}`, "score-update", {
-      player,
-      points,
-      description: actionDescription,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    });
-
-    return NextResponse.json({ success: true, event: newEvent }, { status: 200 });
-
-  } catch (error: any) {
-    console.error("Score Update Error:", error);
+    return NextResponse.json(result.body, { status: result.status });
+  } catch (error) {
+    logError("umpire.score_update.failed", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

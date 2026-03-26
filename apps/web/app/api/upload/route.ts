@@ -5,17 +5,23 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../../lib/auth";
 import { logError } from "../../../lib/logger";
 import { applyRateLimit, jsonError } from "../../../lib/request";
+import { enforceTrustedOrigin, validateImageUpload } from "../../../lib/security";
 import { isMaintenanceModeEnabled } from "../../../lib/settings";
 import { storeUploadedImage } from "../../../lib/upload-storage";
 
 export async function POST(req: Request) {
   try {
+    const trustedOriginResponse = enforceTrustedOrigin(req);
+    if (trustedOriginResponse) {
+      return trustedOriginResponse;
+    }
+
     const maintenanceMode = await isMaintenanceModeEnabled();
     if (maintenanceMode) {
       return jsonError("Uploads are temporarily unavailable during maintenance mode.", 503);
     }
 
-    const rateLimitResponse = applyRateLimit(req, "upload", 20, 60_000);
+    const rateLimitResponse = await applyRateLimit(req, "upload", 20, 60_000);
     if (rateLimitResponse) {
       return rateLimitResponse;
     }
@@ -33,6 +39,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "No file provided." }, { status: 400 });
     }
 
+    validateImageUpload(file);
     const stored = await storeUploadedImage(file);
     return NextResponse.json({ success: true, url: stored.url, storageMode: stored.storageMode }, { status: 200 });
 

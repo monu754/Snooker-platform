@@ -1,0 +1,33 @@
+aws_region   = "ap-south-1"
+environment  = "production"
+project_name = "snooker-platform"
+image_uri    = "123456789012.dkr.ecr.ap-south-1.amazonaws.com/snooker-platform:web-latest"
+
+app_secret_arns = {
+  mongodb_uri          = "arn:aws:secretsmanager:ap-south-1:123456789012:secret:snooker/mongodb"
+  nextauth_secret      = "arn:aws:secretsmanager:ap-south-1:123456789012:secret:snooker/nextauth"
+  vapid_private_key    = "arn:aws:secretsmanager:ap-south-1:123456789012:secret:snooker/vapid-private"
+  google_client_id     = ""
+  google_client_secret = ""
+  pusher_app_id        = ""
+  pusher_secret        = ""
+  pusher_key           = ""
+  pusher_cluster       = ""
+  smtp_host            = ""
+  smtp_port            = ""
+  smtp_user            = ""
+  smtp_pass            = ""
+  smtp_from            = ""
+  alert_webhook_url    = ""
+  billing_api_key      = ""
+}
+
+public_env = {
+  nextauth_url                  = "https://snooker.example.com"
+  next_public_vapid_public_key = "YOUR_PUBLIC_VAPID_KEY"
+  vapid_subject                = "mailto:platform@example.com"
+  upload_storage_mode          = "object"
+  upload_object_endpoint       = "https://uploads.example.com/upload"
+  upload_object_public_base_url = "https://cdn.example.com"
+  billing_checkout_endpoint    = "https://billing.example.com/checkout"
+}

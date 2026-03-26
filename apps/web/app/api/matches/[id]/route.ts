@@ -8,13 +8,18 @@ import ChatMessage from "../../../../lib/models/ChatMessage";
 import { pusherServer } from "../../../../lib/pusher";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../../../lib/auth";
-import User from "../../../../lib/models/User";
 import { sendMatchAssignmentEmail } from "../../../../lib/mail";
 import { logError } from "../../../../lib/logger";
 import { applyRateLimit, jsonError } from "../../../../lib/request";
+import { enforceTrustedOrigin } from "../../../../lib/security";
 import { isMaintenanceModeEnabled } from "../../../../lib/settings";
 import { ValidationError, validateMatchPatchInput } from "../../../../lib/validation";
 import { normalizeViewerSessions } from "../../../../lib/viewer-presence";
+import { areRegisteredPlayers } from "../../../../lib/player-profiles";
+import { findAssignedUmpire } from "../../../../lib/umpire-assignment";
+import { notifyFavoriteUsersForLiveMatch } from "../../../../lib/push";
+import { shouldNotifyFavoriteUsersOnStatusChange } from "../../../../lib/workflows/match-live-alerts";
+import { runAdminDeleteMatchWorkflow } from "../../../../lib/workflows/admin-match-management";
 
 const UMPIRE_ALLOWED_PATCH_FIELDS = new Set([
   "status",
@@ -35,7 +40,6 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
     if (!match) return NextResponse.json({ error: "Match not found" }, { status: 404 });
 
     normalizeViewerSessions(match as any);
-    await match.save();
 
     const events = await Event.find({ matchId: params.id }).sort({ createdAt: -1 }).lean();
 
@@ -51,12 +55,17 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
 
 export async function PATCH(req: Request, props: { params: Promise<{ id: string }> }) {
   try {
+    const trustedOriginResponse = enforceTrustedOrigin(req);
+    if (trustedOriginResponse) {
+      return trustedOriginResponse;
+    }
+
     const maintenanceMode = await isMaintenanceModeEnabled();
     if (maintenanceMode) {
       return jsonError("Match updates are temporarily unavailable during maintenance mode.", 503);
     }
 
-    const rateLimitResponse = applyRateLimit(req, "matches:update", 60, 60_000);
+    const rateLimitResponse = await applyRateLimit(req, "matches:update", 60, 60_000);
     if (rateLimitResponse) {
       return rateLimitResponse;
     }
@@ -69,7 +78,7 @@ export async function PATCH(req: Request, props: { params: Promise<{ id: string 
     await dbConnect();
     const params = await props.params;
 
-    const existingMatch = await Match.findById(params.id);
+    const existingMatch = await Match.findById(params.id).select("+favoriteAlertUserIds");
     if (!existingMatch) {
       return NextResponse.json({ error: "Match not found" }, { status: 404 });
     }
@@ -95,11 +104,34 @@ export async function PATCH(req: Request, props: { params: Promise<{ id: string 
       return jsonError("No valid updates provided", 400);
     }
 
+    if (role === "admin" && (matchUpdates.playerA !== undefined || matchUpdates.playerB !== undefined)) {
+      const nextPlayerA = String(matchUpdates.playerA ?? existingMatch.playerA);
+      const nextPlayerB = String(matchUpdates.playerB ?? existingMatch.playerB);
+
+      if (nextPlayerA === nextPlayerB) {
+        return jsonError("Player A and Player B must be different registered players.", 400);
+      }
+
+      const playersRegistered = await areRegisteredPlayers([nextPlayerA, nextPlayerB]);
+      if (!playersRegistered) {
+        return jsonError("Both match players must exist in the player directory before saving the match.", 400);
+      }
+    }
+
     if (matchUpdates.totalFrames !== undefined && matchUpdates.framesToWin === undefined) {
       matchUpdates.framesToWin = Math.floor(Number(matchUpdates.totalFrames) / 2) + 1;
     }
 
     const originalUmpireId = existingMatch.umpireId?.toString() || "";
+    const nextAssignedUmpire =
+      role === "admin" && typeof matchUpdates.umpireId === "string" && matchUpdates.umpireId.trim()
+        ? await findAssignedUmpire(matchUpdates.umpireId.trim())
+        : null;
+
+    if (role === "admin" && typeof matchUpdates.umpireId === "string" && matchUpdates.umpireId.trim() && !nextAssignedUmpire) {
+      return jsonError("Assigned umpire must be an existing umpire account.", 400);
+    }
+
     const updateOperation: { $set?: Record<string, unknown>; $unset?: Record<string, string> } = {};
 
     if (Object.keys(matchUpdates).length > 0) {
@@ -177,11 +209,11 @@ export async function PATCH(req: Request, props: { params: Promise<{ id: string 
         : "";
 
     if (nextUmpireId && nextUmpireId !== originalUmpireId) {
-       const umpire = await User.findById(nextUmpireId).lean();
-       if (umpire && (umpire as any).email) {
+       const umpire = nextAssignedUmpire ?? await findAssignedUmpire(nextUmpireId);
+       if (umpire?.email) {
           const mailResult = await sendMatchAssignmentEmail(
-            (umpire as any).email, 
-            (umpire as any).name, 
+            umpire.email, 
+            umpire.name || "Umpire", 
             updatedMatch.title, 
             new Date(updatedMatch.scheduledTime).toISOString()
           );
@@ -190,6 +222,11 @@ export async function PATCH(req: Request, props: { params: Promise<{ id: string 
             mailError = (mailResult.error as any)?.message || "Failed to send email";
           }
        }
+    }
+
+    const previousStatus = existingMatch.status;
+    if (shouldNotifyFavoriteUsersOnStatusChange(previousStatus, updatedMatch.status)) {
+      await notifyFavoriteUsersForLiveMatch(params.id);
     }
 
     return NextResponse.json({ 
@@ -211,6 +248,11 @@ export async function PATCH(req: Request, props: { params: Promise<{ id: string 
 
 export async function DELETE(req: Request, props: { params: Promise<{ id: string }> }) {
   try {
+    const trustedOriginResponse = enforceTrustedOrigin(req);
+    if (trustedOriginResponse) {
+      return trustedOriginResponse;
+    }
+
     const maintenanceMode = await isMaintenanceModeEnabled();
     if (maintenanceMode) {
       return jsonError("Match deletion is temporarily unavailable during maintenance mode.", 503);
@@ -223,23 +265,18 @@ export async function DELETE(req: Request, props: { params: Promise<{ id: string
 
     await dbConnect();
     const params = await props.params;
-    await Promise.all([
-      Match.findByIdAndDelete(params.id),
-      Event.deleteMany({ matchId: params.id }),
-      ChatMessage.deleteMany({ matchId: params.id }),
-    ]);
-
-    // Log the deletion to System Events
-    await Event.create({
-      player: "System",
-      eventType: "match_deleted",
-      points: 0,
-      description: `Match Deleted (ID: ${params.id}) by Admin`,
-      category: "admin",
-      frameNumber: 0
+    const result = await runAdminDeleteMatchWorkflow(params.id, {
+      deleteMatch: (id) => Match.findByIdAndDelete(id).lean(),
+      deleteEvents: async (matchId) => {
+        await Event.deleteMany({ matchId });
+      },
+      deleteChatMessages: async (matchId) => {
+        await ChatMessage.deleteMany({ matchId });
+      },
+      createEvent: (input) => Event.create(input),
     });
 
-    return NextResponse.json({ success: true }, { status: 200 });
+    return NextResponse.json(result.body, { status: result.status });
   } catch (error) {
     logError("matches.delete_failed", error);
     return NextResponse.json({ error: "Server Error" }, { status: 500 });

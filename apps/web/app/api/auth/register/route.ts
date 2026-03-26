@@ -4,12 +4,18 @@ import dbConnect from "../../../../lib/mongodb";
 import User from "../../../../lib/models/User";
 import { logError } from "../../../../lib/logger";
 import { applyRateLimit, jsonError } from "../../../../lib/request";
+import { enforceTrustedOrigin } from "../../../../lib/security";
 import { getPlatformSettings } from "../../../../lib/settings";
-import { ValidationError, validateRegistrationInput } from "../../../../lib/validation";
+import { ValidationError, runRegistrationWorkflow } from "../../../../lib/workflows/registration";
 
 export async function POST(req: Request) {
   try {
-    const rateLimitResponse = applyRateLimit(req, "register", 5, 60_000);
+    const trustedOriginResponse = enforceTrustedOrigin(req);
+    if (trustedOriginResponse) {
+      return trustedOriginResponse;
+    }
+
+    const rateLimitResponse = await applyRateLimit(req, "register", 5, 60_000);
     if (rateLimitResponse) {
       return rateLimitResponse;
     }
@@ -23,30 +29,18 @@ export async function POST(req: Request) {
       return jsonError("Registration is currently disabled by the administrator.", 403);
     }
 
-    const { name, email, password } = validateRegistrationInput(await req.json());
     await dbConnect();
-
-    // Check if user already exists
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return NextResponse.json({ error: "Email is already registered" }, { status: 400 });
-    }
-
-    // Hash the password securely
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Create the standard user (Role defaults to "user" inside the User model)
-    const newUser = await User.create({
-      name,
-      email,
-      password: hashedPassword,
+    const result = await runRegistrationWorkflow(await req.json(), settings, {
+      findExistingUser: (email) => User.findOne({ email }),
+      createUser: (input) =>
+        User.create({
+          name: input.name,
+          email: input.email,
+          password: input.password,
+        }),
+      hashPassword: (password) => bcrypt.hash(password, 10),
     });
-
-    return NextResponse.json({ 
-      success: true, 
-      message: "User registered successfully", 
-      userId: newUser._id 
-    }, { status: 201 });
+    return NextResponse.json(result.body, { status: result.status });
 
   } catch (error: unknown) {
     if (error instanceof ValidationError) {

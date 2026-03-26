@@ -3,21 +3,53 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { User, Mail, Lock, CheckCircle, AlertCircle, ArrowLeft, Camera, Loader2 } from "lucide-react";
+import Image from "next/image";
+import { User, Mail, Lock, CheckCircle, AlertCircle, ArrowLeft, Camera, Loader2, Star, Zap, Search, X } from "lucide-react";
+import { canPurchasePremium } from "../../lib/access";
+import { SUBSCRIPTION_PRICING } from "../../lib/subscriptions";
 
 type ProfileMeta = {
   createdAt: string;
   updatedAt: string;
 };
 
+type SessionUser = {
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
+  role?: string;
+  subscriptionTier?: string;
+};
+
+type PlayerOption = {
+  _id: string;
+  name: string;
+  country?: string;
+  rank?: number;
+};
+
 export default function ProfilePage() {
   const { data: session, status, update } = useSession();
-  const [name, setName] = useState(session?.user?.name || "");
+  const sessionUser = session?.user as SessionUser | undefined;
+  const [hasMounted, setHasMounted] = useState(false);
+  const [name, setName] = useState("");
+  const [subscriptionTier, setSubscriptionTier] = useState("free");
+  const [favoritePlayers, setFavoritePlayers] = useState<string[]>([]);
+  const [favoritePlayerQuery, setFavoritePlayerQuery] = useState("");
+  const [playerOptions, setPlayerOptions] = useState<PlayerOption[]>([]);
+  const [playersLoading, setPlayersLoading] = useState(true);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
   const [profileMeta, setProfileMeta] = useState<ProfileMeta | null>(null);
+  const [checkoutLoadingTier, setCheckoutLoadingTier] = useState("");
+  const role = sessionUser?.role || "user";
+  const canManagePremium = canPurchasePremium(role);
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
 
   useEffect(() => {
     setName(session?.user?.name || "");
@@ -25,6 +57,13 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!session?.user) return;
+
+    setPlayersLoading(true);
+    fetch("/api/players", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => setPlayerOptions(data.players || []))
+      .catch(() => {})
+      .finally(() => setPlayersLoading(false));
 
     fetch("/api/user/profile", { cache: "no-store" })
       .then((res) => res.json())
@@ -34,12 +73,14 @@ export default function ProfilePage() {
             createdAt: data.user.createdAt,
             updatedAt: data.user.updatedAt,
           });
+          setSubscriptionTier(data.user.subscriptionTier || "free");
+          setFavoritePlayers(data.user.favoritePlayers || []);
         }
       })
       .catch(() => {});
   }, [session?.user]);
 
-  if (status === "loading") {
+  if (!hasMounted || status === "loading") {
     return (
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
@@ -76,7 +117,12 @@ export default function ProfilePage() {
       const res = await fetch("/api/user/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, password }),
+        body: JSON.stringify({
+          name,
+          password,
+          ...(canManagePremium ? { subscriptionTier } : {}),
+          favoritePlayers,
+        }),
       });
 
       const data = await res.json();
@@ -89,12 +135,64 @@ export default function ProfilePage() {
       setProfileMeta((prev) => prev ? { ...prev, updatedAt: new Date().toISOString() } : prev);
       
       // Update the session in real-time
-      await update({ ...session, user: { ...session.user, name } });
+      await update({ ...session, user: { ...session?.user, name, subscriptionTier } });
       
-    } catch (err: any) {
-      setMessage({ type: "error", text: err.message });
+    } catch (err) {
+      setMessage({ type: "error", text: err instanceof Error ? err.message : "Update failed" });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const filteredPlayerOptions = playerOptions.filter((player) => {
+    const query = favoritePlayerQuery.trim().toLowerCase();
+    if (!query) return true;
+
+    return (
+      player.name.toLowerCase().includes(query) ||
+      (player.country || "").toLowerCase().includes(query)
+    );
+  });
+
+  const toggleFavoritePlayer = (playerName: string) => {
+    setFavoritePlayers((prev) =>
+      prev.includes(playerName)
+        ? prev.filter((favorite) => favorite !== playerName)
+        : [...prev, playerName],
+    );
+  };
+
+  const handleCheckout = async (tier: "plus" | "pro") => {
+    setCheckoutLoadingTier(tier);
+    setMessage({ type: "", text: "" });
+
+    try {
+      const res = await fetch("/api/subscription/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tier }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data.error || "Unable to start checkout");
+      }
+
+      if (data.checkoutUrl) {
+        window.location.href = data.checkoutUrl;
+        return;
+      }
+
+      if (data.tier) {
+        setSubscriptionTier(data.tier);
+        await update({ ...session, user: { ...session?.user, subscriptionTier: data.tier } });
+      }
+
+      setMessage({ type: "success", text: data.message || "Premium access updated successfully." });
+    } catch (err) {
+      setMessage({ type: "error", text: err instanceof Error ? err.message : "Unable to start checkout" });
+    } finally {
+      setCheckoutLoadingTier("");
     }
   };
 
@@ -129,7 +227,7 @@ export default function ProfilePage() {
               <div className="relative w-24 h-24 mx-auto mb-4 group text-center">
                 <div className="w-full h-full rounded-2xl bg-zinc-800 flex items-center justify-center border-2 border-zinc-700 group-hover:border-emerald-500 transition-colors">
                   {session.user?.image ? (
-                    <img src={session.user.image} alt={session.user.name || "User"} className="w-full h-full object-cover rounded-2xl" />
+                    <Image src={session.user.image} alt={session.user.name || "User"} fill className="object-cover rounded-2xl" />
                   ) : (
                     <User size={40} className="text-zinc-600 group-hover:text-emerald-500 transition-colors" />
                   )}
@@ -143,7 +241,7 @@ export default function ProfilePage() {
                 <p className="text-zinc-500 text-sm font-medium">{session.user?.email}</p>
                 <div className="mt-4 flex justify-center">
                   <span className="px-3 py-1 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded-full text-xs font-bold uppercase tracking-wider">
-                    {(session.user as any)?.role || "User"}
+                    {sessionUser?.role || "User"}
                   </span>
                 </div>
               </div>
@@ -227,6 +325,117 @@ export default function ProfilePage() {
 
                   <div className="space-y-4">
                     <h4 className="text-lg font-bold flex items-center gap-2">
+                      <Zap size={20} className="text-emerald-500" />
+                      {canManagePremium ? "Premium Access" : "Role Access"}
+                    </h4>
+                    {canManagePremium ? (
+                      <div className="grid gap-3 md:grid-cols-3">
+                        <div className={`rounded-2xl border p-4 text-left ${subscriptionTier === "free" ? "border-emerald-500 bg-emerald-500/10" : "border-zinc-800 bg-zinc-950"}`}>
+                          <p className="font-bold">Free</p>
+                          <p className="mt-2 text-sm text-zinc-400">Single live stream and standard viewer tools.</p>
+                        </div>
+                        {(Object.entries(SUBSCRIPTION_PRICING) as Array<["plus" | "pro", (typeof SUBSCRIPTION_PRICING)["plus"]]>).map(([tierKey, tier]) => (
+                          <div key={tierKey} className={`rounded-2xl border p-4 text-left ${subscriptionTier === tierKey ? "border-emerald-500 bg-emerald-500/10" : "border-zinc-800 bg-zinc-950"}`}>
+                            <p className="font-bold">{tier.label}</p>
+                            <p className="mt-1 text-sm text-emerald-400">${tier.monthlyPriceUsd}/month</p>
+                            <p className="mt-2 text-sm text-zinc-400">{tier.description}</p>
+                            <button
+                              type="button"
+                              onClick={() => handleCheckout(tierKey)}
+                              disabled={checkoutLoadingTier === tierKey || subscriptionTier === tierKey}
+                              className="mt-4 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:bg-zinc-800 disabled:text-zinc-500"
+                            >
+                              {checkoutLoadingTier === tierKey ? "Processing..." : subscriptionTier === tierKey ? "Current Plan" : `Buy ${tier.label}`}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 text-sm text-zinc-400">
+                        {role === "admin"
+                          ? "Admins already have full platform access through their role. Premium plans are not used for admin accounts."
+                          : "Umpires already have the tools they need through their role. Premium plans are only for viewer accounts."}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-zinc-400 uppercase tracking-wider ml-1 flex items-center gap-2">
+                      <Star size={14} className="text-amber-400" />
+                      Favorite Players
+                    </label>
+                    <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
+                      <div className="relative">
+                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+                        <input
+                          type="text"
+                          value={favoritePlayerQuery}
+                          onChange={(e) => setFavoritePlayerQuery(e.target.value)}
+                          placeholder="Search registered players"
+                          className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-10 py-3 text-sm outline-none transition-all placeholder:text-zinc-600 focus:border-emerald-500"
+                        />
+                      </div>
+
+                      {favoritePlayers.length > 0 && (
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          {favoritePlayers.map((playerName) => (
+                            <button
+                              key={playerName}
+                              type="button"
+                              onClick={() => toggleFavoritePlayer(playerName)}
+                              className="inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-300"
+                            >
+                              {playerName}
+                              <X size={12} />
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="mt-4 max-h-72 space-y-2 overflow-y-auto pr-1">
+                        {playersLoading ? (
+                          <div className="rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-zinc-500">
+                            Loading registered players...
+                          </div>
+                        ) : filteredPlayerOptions.length === 0 ? (
+                          <div className="rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-zinc-500">
+                            No registered players matched your search.
+                          </div>
+                        ) : (
+                          filteredPlayerOptions.map((player) => {
+                            const selected = favoritePlayers.includes(player.name);
+                            return (
+                              <label
+                                key={player._id}
+                                className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 transition-colors ${
+                                  selected
+                                    ? "border-emerald-500/40 bg-emerald-500/10"
+                                    : "border-zinc-800 bg-zinc-900 hover:border-zinc-700"
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selected}
+                                  onChange={() => toggleFavoritePlayer(player.name)}
+                                  className="mt-1 h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-emerald-500 focus:ring-emerald-500"
+                                />
+                                <div className="min-w-0">
+                                  <p className="font-medium text-white">{player.name}</p>
+                                  <p className="text-xs text-zinc-500">
+                                    {[player.country || "Country pending", player.rank ? `Rank #${player.rank}` : "Unranked"].join(" • ")}
+                                  </p>
+                                </div>
+                              </label>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-zinc-600 ml-1">Choose one or more registered players. Browser alerts use this list when your favorites go live.</p>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h4 className="text-lg font-bold flex items-center gap-2">
                       <Lock size={20} className="text-emerald-500" />
                       Security
                     </h4>
@@ -253,7 +462,7 @@ export default function ProfilePage() {
                         />
                       </div>
                     </div>
-                    <p className="text-[10px] text-zinc-600 ml-1">Leave blank if you don't want to change your password.</p>
+                    <p className="text-[10px] text-zinc-600 ml-1">Leave blank if you don&apos;t want to change your password.</p>
                   </div>
 
                   <div className="pt-4 flex items-center justify-end gap-4">

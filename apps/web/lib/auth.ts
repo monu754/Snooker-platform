@@ -7,57 +7,66 @@ import User from "./models/User";
 import Event from "./models/Event";
 import { logError, logInfo, logWarn } from "./logger";
 import { getPlatformSettings } from "./settings";
+import { sanitizeStoredSubscriptionTier } from "./access";
+import { isGoogleAuthConfigured } from "./runtime-config";
 
-export const authOptions: NextAuthOptions = {
-  providers: [
+const providers = [];
+
+if (isGoogleAuthConfigured()) {
+  providers.push(
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID as string,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
     }),
-    // --- NEW: Email/Password Login Support ---
-    CredentialsProvider({
-      name: "Credentials",
-      credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" },
-      },
-      async authorize(credentials) {
-        await dbConnect();
-        if (!credentials?.email || !credentials?.password) {
-          logWarn("auth.credentials.missing_fields");
-          return null;
-        }
+  );
+}
 
-        // Find user and explicitly select the hidden password field
-        const user = await User.findOne({ email: credentials.email }).select("+password");
-        
-        if (!user || !user.password) {
-          logWarn("auth.credentials.user_missing", { email: credentials.email });
-          return null;
-        }
-
-        const settings = await getPlatformSettings();
-        if (settings.maintenanceMode && user.role === "user") {
-          logWarn("auth.credentials.blocked_by_maintenance", { email: credentials.email });
-          return null;
-        }
-
-        // Verify the password
-        const isPasswordValid = await bcrypt.compare(credentials.password, user.password);
-        
-        if (!isPasswordValid) return null;
-
-        logInfo("auth.credentials.success", { email: user.email, role: user.role });
-        // Return the user object for the session
-        return {
-          id: user._id.toString(),
-          email: user.email,
-          name: user.name,
-          role: user.role,
-        };
+providers.push(
+  // Email/password stays available for privileged access and local recovery.
+  CredentialsProvider({
+    name: "Credentials",
+    credentials: {
+      email: { label: "Email", type: "email" },
+      password: { label: "Password", type: "password" },
+    },
+    async authorize(credentials) {
+      await dbConnect();
+      if (!credentials?.email || !credentials?.password) {
+        logWarn("auth.credentials.missing_fields");
+        return null;
       }
-    })
-  ],
+
+      const user = await User.findOne({ email: credentials.email }).select("+password");
+
+      if (!user || !user.password) {
+        logWarn("auth.credentials.user_missing", { email: credentials.email });
+        return null;
+      }
+
+      const settings = await getPlatformSettings();
+      if (settings.maintenanceMode && user.role === "user") {
+        logWarn("auth.credentials.blocked_by_maintenance", { email: credentials.email });
+        return null;
+      }
+
+      const isPasswordValid = await bcrypt.compare(credentials.password, user.password);
+
+      if (!isPasswordValid) return null;
+
+      logInfo("auth.credentials.success", { email: user.email, role: user.role });
+      return {
+        id: user._id.toString(),
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        subscriptionTier: sanitizeStoredSubscriptionTier(user.role, user.subscriptionTier),
+      };
+    },
+  }),
+);
+
+export const authOptions: NextAuthOptions = {
+  providers,
   session: { strategy: "jwt" },
   callbacks: {
     async signIn({ user, account }) {
@@ -91,6 +100,8 @@ export const authOptions: NextAuthOptions = {
         if (dbUser) {
           token.id = dbUser._id.toString();
           token.role = dbUser.role;
+          token.subscriptionTier = sanitizeStoredSubscriptionTier(dbUser.role, dbUser.subscriptionTier);
+          token.favoritePlayers = dbUser.favoritePlayers || [];
         }
       }
       return token;
@@ -99,6 +110,8 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         (session.user as any).id = token.id;
         (session.user as any).role = token.role;
+        (session.user as any).subscriptionTier = token.subscriptionTier || "free";
+        (session.user as any).favoritePlayers = token.favoritePlayers || [];
       }
       return session;
     },

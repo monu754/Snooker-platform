@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import "./globals.css";
 import { Providers } from "../components/providers";
 import GlobalAnnouncement from "../components/GlobalAnnouncement";
+import NetworkStatusBanner from "../components/NetworkStatusBanner";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -17,6 +18,7 @@ const geistMono = localFont({
 export const metadata: Metadata = {
   title: "SnookerStream Platform",
   description: "Live Snooker Streaming and Scoring",
+  manifest: "/manifest.webmanifest",
 };
 
 export default function RootLayout({
@@ -31,6 +33,7 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <Providers>
+          <NetworkStatusBanner />
           <GlobalAnnouncement />
           {children}
         </Providers>

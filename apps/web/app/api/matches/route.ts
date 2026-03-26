@@ -6,13 +6,16 @@ import { authOptions } from "../../../lib/auth";
 import dbConnect from "../../../lib/mongodb"; 
 import Match from "../../../lib/models/Match"; 
 import Event from "../../../lib/models/Event";
-import User from "../../../lib/models/User";
 import { sendMatchAssignmentEmail } from "../../../lib/mail";
 import { logError } from "../../../lib/logger";
 import { applyRateLimit, jsonError } from "../../../lib/request";
+import { enforceTrustedOrigin } from "../../../lib/security";
 import { isMaintenanceModeEnabled } from "../../../lib/settings";
 import { ValidationError, validateMatchInput } from "../../../lib/validation";
 import { normalizeViewerSessions } from "../../../lib/viewer-presence";
+import { areRegisteredPlayers } from "../../../lib/player-profiles";
+import { findAssignedUmpire } from "../../../lib/umpire-assignment";
+import { runAdminCreateMatchWorkflow } from "../../../lib/workflows/admin-match-management";
 
 export async function GET(req: Request) {
   try {
@@ -24,16 +27,11 @@ export async function GET(req: Request) {
     if (statusFilter) query = { status: statusFilter };
 
     const matches = await Match.find(query).sort({ scheduledTime: 1 }).select("+activeViewerSessions");
-    await Promise.all(
-      matches.map(async (match: any) => {
-        normalizeViewerSessions(match);
-        await match.save();
-      }),
-    );
 
     return NextResponse.json({
       success: true,
       matches: matches.map((match: any) => {
+        normalizeViewerSessions(match);
         const item = match.toObject();
         delete item.activeViewerSessions;
         return item;
@@ -46,12 +44,17 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    const trustedOriginResponse = enforceTrustedOrigin(req);
+    if (trustedOriginResponse) {
+      return trustedOriginResponse;
+    }
+
     const maintenanceMode = await isMaintenanceModeEnabled();
     if (maintenanceMode) {
       return jsonError("Match creation is temporarily unavailable during maintenance mode.", 503);
     }
 
-    const rateLimitResponse = applyRateLimit(req, "matches:create", 20, 60_000);
+    const rateLimitResponse = await applyRateLimit(req, "matches:create", 20, 60_000);
     if (rateLimitResponse) {
       return rateLimitResponse;
     }
@@ -64,71 +67,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized. Admin access required." }, { status: 403 });
     }
 
-    const { title, playerA, playerB, format, totalFrames, scheduledTime, venue, streamUrl, thumbnailUrl, umpireId } =
-      validateMatchInput(await req.json());
-
-    const framesToWin = Math.floor(Number(totalFrames) / 2) + 1;
-
-    // Build the match object
-    const matchData: any = {
-      title,
-      playerA,
-      playerB,
-      format,
-      totalFrames: Number(totalFrames),
-      framesToWin,
-      scheduledTime,
-      venue,
-      streamUrl: streamUrl || "",
-      thumbnailUrl: thumbnailUrl || "",
-      status: "scheduled",
-    };
-
-    // Only attach umpireId if a valid one was selected
-    if (umpireId && umpireId !== "") {
-      matchData.umpireId = umpireId;
-    }
-
-    // 1. Save the new match to MongoDB
-    const newMatch = await Match.create(matchData);
-
-    // 2. Log the creation to System Events for the Dashboard
-    await Event.create({
-      matchId: newMatch._id,
-      frameNumber: 0,
-      player: "System",
-      eventType: "system_alert",
-      points: 0,
-      description: `Match Created: ${title} scheduled for ${new Date(scheduledTime).toLocaleDateString()}`,
-      category: "admin"
+    const result = await runAdminCreateMatchWorkflow(await req.json(), {
+      areRegisteredPlayers,
+      findAssignedUmpire,
+      createMatch: (input) => Match.create(input as any),
+      createEvent: (input) => Event.create(input),
+      deleteMatch: async () => null,
+      deleteEvents: async () => undefined,
+      deleteChatMessages: async () => undefined,
+      sendMatchAssignmentEmail,
     });
 
-    // 3. If an umpire was assigned, send them an email
-    let mailSent = false;
-    let mailError = null;
-
-    if (umpireId) {
-      const umpire = await User.findById(umpireId).lean();
-      if (umpire && (umpire as any).email) {
-          const mailResult = await sendMatchAssignmentEmail(
-            (umpire as any).email,
-            (umpire as any).name,
-            title,
-            scheduledTime.toISOString(),
-          );
-        mailSent = mailResult.success;
-        if (!mailResult.success) {
-          mailError = (mailResult.error as any)?.message || "Failed to send email";
-        }
-      }
-    }
-
-    return NextResponse.json({ 
-      success: true, 
-      match: newMatch,
-      mailSent,
-      mailError
-    }, { status: 201 });
+    return NextResponse.json(result.body, { status: result.status });
 
   } catch (error: unknown) {
     if (error instanceof ValidationError) {

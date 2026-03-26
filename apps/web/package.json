@@ -9,7 +9,8 @@
     "start": "next start",
     "lint": "eslint --max-warnings 0",
     "check-types": "next typegen && tsc --noEmit",
-    "test": "node --test tests/**/*.test.ts"
+    "test": "node --test --test-isolation=none tests/**/*.test.ts",
+    "test:ui": "playwright test"
   },
   "dependencies": {
     "@repo/ui": "workspace:*",
@@ -23,9 +24,11 @@
     "pusher": "^5.3.2",
     "pusher-js": "^8.4.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "@tailwindcss/postcss": "^4.2.1",

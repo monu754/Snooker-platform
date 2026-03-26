@@ -6,8 +6,8 @@ import Match from "../../../../../lib/models/Match";
 import { pusherServer } from "../../../../../lib/pusher";
 import { logError } from "../../../../../lib/logger";
 import { applyRateLimit, jsonError } from "../../../../../lib/request";
-import { removeViewerSession, upsertViewerSession } from "../../../../../lib/viewer-presence";
 import { broadcastViewerStats } from "../../../../../lib/dashboard-events";
+import { runViewerHeartbeatWorkflow, runViewerReleaseWorkflow } from "../../../../../lib/workflows/viewer-presence";
 
 async function readViewerToken(req: Request) {
   try {
@@ -25,7 +25,7 @@ async function readViewerToken(req: Request) {
 /** Heartbeat/upsert for a viewer currently on the watch page. */
 export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
   try {
-    const rateLimitResponse = applyRateLimit(req, "viewers:heartbeat", 180, 60_000);
+    const rateLimitResponse = await applyRateLimit(req, "viewers:heartbeat", 180, 60_000);
     if (rateLimitResponse) {
       return rateLimitResponse;
     }
@@ -38,14 +38,14 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
     }
 
     const match = await Match.findById(params.id).select("+activeViewerSessions");
-    if (!match) return NextResponse.json({ error: "Match not found" }, { status: 404 });
+    const result = await runViewerHeartbeatWorkflow(params.id, viewerToken, match as any, {
+      trigger: async (matchId, eventName, payload) => {
+        await pusherServer.trigger(`match-${matchId}`, eventName, payload);
+      },
+      broadcastViewerStats,
+    });
 
-    const viewers = upsertViewerSession(match as any, viewerToken);
-    await match.save();
-    await pusherServer.trigger(`match-${params.id}`, "viewer-update", { viewers });
-    await broadcastViewerStats(params.id, viewers);
-
-    return NextResponse.json({ success: true, viewers });
+    return NextResponse.json(result.body, { status: result.status });
   } catch (error) {
     logError("viewers.heartbeat_failed", error);
     return NextResponse.json({ error: "Server Error" }, { status: 500 });
@@ -55,7 +55,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
 /** Called when a viewer leaves the watch page. */
 export async function DELETE(req: Request, props: { params: Promise<{ id: string }> }) {
   try {
-    const rateLimitResponse = applyRateLimit(req, "viewers:decrement", 60, 60_000);
+    const rateLimitResponse = await applyRateLimit(req, "viewers:decrement", 60, 60_000);
     if (rateLimitResponse) {
       return rateLimitResponse;
     }
@@ -68,14 +68,14 @@ export async function DELETE(req: Request, props: { params: Promise<{ id: string
     }
 
     const match = await Match.findById(params.id).select("+activeViewerSessions");
-    if (!match) return NextResponse.json({ error: "Match not found" }, { status: 404 });
+    const result = await runViewerReleaseWorkflow(params.id, viewerToken, match as any, {
+      trigger: async (matchId, eventName, payload) => {
+        await pusherServer.trigger(`match-${matchId}`, eventName, payload);
+      },
+      broadcastViewerStats,
+    });
 
-    const viewers = removeViewerSession(match as any, viewerToken);
-    await match.save();
-    await pusherServer.trigger(`match-${params.id}`, "viewer-update", { viewers });
-    await broadcastViewerStats(params.id, viewers);
-
-    return NextResponse.json({ success: true, viewers });
+    return NextResponse.json(result.body, { status: result.status });
   } catch (error) {
     logError("viewers.decrement_failed", error);
     return NextResponse.json({ error: "Server Error" }, { status: 500 });

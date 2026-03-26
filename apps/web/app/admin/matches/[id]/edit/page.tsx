@@ -33,6 +33,7 @@ export default function EditMatchPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [umpires, setUmpires] = useState<any[]>([]);
+  const [players, setPlayers] = useState<Array<{ _id: string; name: string; country?: string; rank?: number }>>([]);
   const [uploadMode, setUploadMode] = useState<"url" | "file">("url");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
@@ -50,10 +51,15 @@ export default function EditMatchPage() {
   });
 
   useEffect(() => {
-    Promise.all([fetch(`/api/matches/${matchId}`, { cache: "no-store" }), fetch("/api/admin/umpires")])
-      .then(async ([matchRes, umpireRes]) => {
+    Promise.all([
+      fetch(`/api/matches/${matchId}`, { cache: "no-store" }),
+      fetch("/api/admin/umpires", { cache: "no-store" }),
+      fetch("/api/admin/players", { cache: "no-store" }),
+    ])
+      .then(async ([matchRes, umpireRes, playerRes]) => {
         const matchData = await matchRes.json();
         const umpireData = await umpireRes.json();
+        const playerData = await playerRes.json();
         if (!matchRes.ok || !matchData.match) {
           throw new Error(matchData.error || "Failed to load match");
         }
@@ -74,6 +80,7 @@ export default function EditMatchPage() {
           thumbnailUrl: match.thumbnailUrl || "",
         });
         setUmpires(umpireData.umpires || []);
+        setPlayers(playerData.players || []);
       })
       .catch((err: any) => setError(err.message))
       .finally(() => setLoading(false));
@@ -158,9 +165,16 @@ export default function EditMatchPage() {
           <section className="bg-[#18181b] border border-zinc-800/50 rounded-xl p-6">
             <h2 className="text-white font-medium flex items-center gap-2 mb-6"><User size={18} className="text-emerald-500" /> Match Participants</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <input type="text" required value={formData.playerA} onChange={(e) => setFormData({ ...formData, playerA: e.target.value })} placeholder="Player A" className="w-full bg-[#09090b] border border-zinc-800 rounded-lg px-4 py-3 text-sm text-white focus:border-emerald-500 outline-none transition-colors" />
-              <input type="text" required value={formData.playerB} onChange={(e) => setFormData({ ...formData, playerB: e.target.value })} placeholder="Player B" className="w-full bg-[#09090b] border border-zinc-800 rounded-lg px-4 py-3 text-sm text-white focus:border-emerald-500 outline-none transition-colors" />
+              <select value={formData.playerA} onChange={(e) => setFormData({ ...formData, playerA: e.target.value })} className="w-full appearance-none rounded-lg border border-zinc-800 bg-[#09090b] px-4 py-3 text-sm text-white outline-none transition-colors focus:border-emerald-500">
+                <option value="">Select registered player</option>
+                {buildPlayerOptions(players, formData.playerB).map((player) => <option key={player._id} value={player.name}>{player.name}{player.country ? ` • ${player.country}` : ""}{player.rank ? ` • Rank ${player.rank}` : ""}</option>)}
+              </select>
+              <select value={formData.playerB} onChange={(e) => setFormData({ ...formData, playerB: e.target.value })} className="w-full appearance-none rounded-lg border border-zinc-800 bg-[#09090b] px-4 py-3 text-sm text-white outline-none transition-colors focus:border-emerald-500">
+                <option value="">Select registered player</option>
+                {buildPlayerOptions(players, formData.playerA).map((player) => <option key={player._id} value={player.name}>{player.name}{player.country ? ` • ${player.country}` : ""}{player.rank ? ` • Rank ${player.rank}` : ""}</option>)}
+              </select>
             </div>
+            <p className="mt-4 text-xs text-zinc-500">Only players already registered in the player manager can be used in matches. <Link href="/admin/players/create" className="text-emerald-500 hover:text-emerald-400">Create player</Link></p>
           </section>
 
           <section className="bg-[#18181b] border border-zinc-800/50 rounded-xl p-6">
@@ -234,4 +248,11 @@ export default function EditMatchPage() {
       </div>
     </div>
   );
+}
+
+function buildPlayerOptions(
+  players: Array<{ _id: string; name: string; country?: string; rank?: number }>,
+  excludedName: string,
+) {
+  return players.filter((player) => player.name !== excludedName);
 }

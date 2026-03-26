@@ -1,6 +1,7 @@
 type LogLevel = "info" | "warn" | "error";
 
 type LogPayload = Record<string, unknown>;
+import { incrementMetric } from "./metrics.ts";
 
 function writeLog(level: LogLevel, message: string, payload?: LogPayload) {
   const entry = {
@@ -11,6 +12,18 @@ function writeLog(level: LogLevel, message: string, payload?: LogPayload) {
   };
 
   const serialized = JSON.stringify(entry);
+  const alertWebhookUrl = process.env.ALERT_WEBHOOK_URL;
+  incrementMetric(`logs_total.${level}`);
+
+  if (alertWebhookUrl && (level === "error" || level === "warn")) {
+    queueMicrotask(() => {
+      fetch(alertWebhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: serialized,
+      }).catch(() => {});
+    });
+  }
 
   if (level === "error") {
     console.error(serialized);

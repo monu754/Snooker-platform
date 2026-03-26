@@ -1,16 +1,19 @@
 import dbConnect from "./mongodb";
 import Settings from "./models/Settings";
+import { isGoogleAuthConfigured } from "./runtime-config";
 
 export type PublicSettings = {
   maintenanceMode: boolean;
   globalAnnouncement: string;
   allowRegistration: boolean;
+  googleAuthEnabled: boolean;
 };
 
 const defaultSettings: PublicSettings = {
   maintenanceMode: false,
   globalAnnouncement: "",
   allowRegistration: true,
+  googleAuthEnabled: false,
 };
 
 export async function getPlatformSettings(): Promise<PublicSettings> {
@@ -19,9 +22,12 @@ export async function getPlatformSettings(): Promise<PublicSettings> {
   const settings = await Settings.findOne(
     {},
     { maintenanceMode: 1, globalAnnouncement: 1, allowRegistration: 1, _id: 0 },
-  ).lean<PublicSettings | null>();
+  ).lean<Omit<PublicSettings, "googleAuthEnabled"> | null>();
 
-  return settings ?? defaultSettings;
+  return {
+    ...(settings ?? defaultSettings),
+    googleAuthEnabled: isGoogleAuthConfigured(),
+  };
 }
 
 export async function ensureSettingsDocument() {

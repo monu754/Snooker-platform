@@ -8,6 +8,7 @@ import bcrypt from "bcryptjs";
 import { sendUmpireWelcomeEmail } from "../../../../lib/mail";
 import { logError, logWarn } from "../../../../lib/logger";
 import { applyRateLimit, jsonError } from "../../../../lib/request";
+import { enforceTrustedOrigin } from "../../../../lib/security";
 import { isMaintenanceModeEnabled } from "../../../../lib/settings";
 import { ValidationError, validateUmpireCreationInput } from "../../../../lib/validation";
 
@@ -26,12 +27,17 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    const trustedOriginResponse = enforceTrustedOrigin(req);
+    if (trustedOriginResponse) {
+      return trustedOriginResponse;
+    }
+
     const maintenanceMode = await isMaintenanceModeEnabled();
     if (maintenanceMode) {
       return jsonError("Umpire creation is temporarily unavailable during maintenance mode.", 503);
     }
 
-    const rateLimitResponse = applyRateLimit(req, "umpires:create", 10, 60_000);
+    const rateLimitResponse = await applyRateLimit(req, "umpires:create", 10, 60_000);
     if (rateLimitResponse) {
       return rateLimitResponse;
     }

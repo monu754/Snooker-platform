@@ -1,11 +1,17 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { ShieldCheck, Home } from "lucide-react";
 import Link from "next/link";
 import { useSession } from "next-auth/react"; 
 
 export default function UmpireLayout({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession();
+  const [hasMounted, setHasMounted] = useState(false);
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex flex-col font-sans">
@@ -17,7 +23,7 @@ export default function UmpireLayout({ children }: { children: React.ReactNode }
         
         <div className="flex items-center gap-4">
           <span className="text-sm text-zinc-400">
-            Logged in as: <strong className="text-white">{session?.user?.name || "Official"}</strong>
+            Logged in as: <strong className="text-white">{hasMounted ? (session?.user?.name || "Official") : "Official"}</strong>
           </span>
           <div className="w-px h-6 bg-zinc-800"></div>
           

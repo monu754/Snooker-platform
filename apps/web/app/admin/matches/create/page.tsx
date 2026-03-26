@@ -16,6 +16,7 @@ export default function CreateMatchPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [players, setPlayers] = useState<Array<{ _id: string; name: string; country?: string; rank?: number }>>([]);
 
   const [formData, setFormData] = useState({
     playerA: "",
@@ -64,9 +65,16 @@ export default function CreateMatchPage() {
   const [umpires, setUmpires] = useState<any[]>([]);
   
   useEffect(() => {
-    fetch("/api/admin/umpires")
-      .then(res => res.json())
-      .then(data => setUmpires(data.umpires || []));
+    Promise.all([
+      fetch("/api/admin/umpires", { cache: "no-store" }),
+      fetch("/api/admin/players", { cache: "no-store" }),
+    ])
+      .then(async ([umpireRes, playerRes]) => {
+        const umpireData = await umpireRes.json();
+        const playerData = await playerRes.json();
+        setUmpires(umpireData.umpires || []);
+        setPlayers(playerData.players || []);
+      });
   }, []);
   // -----------------------------------
 
@@ -159,11 +167,19 @@ export default function CreateMatchPage() {
             <div className="flex flex-col md:flex-row items-center gap-4 relative">
               <div className="w-full space-y-1.5">
                 <label className="text-xs font-medium text-zinc-400">Player A</label>
-                <input 
-                  type="text" required value={formData.playerA} onChange={(e) => setFormData({...formData, playerA: e.target.value})}
-                  placeholder="e.g. Ronnie O'Sullivan" 
-                  className="w-full bg-[#09090b] border border-zinc-800 rounded-lg px-4 py-3 text-sm text-white focus:border-emerald-500 outline-none transition-colors" 
-                />
+                <select
+                  required
+                  value={formData.playerA}
+                  onChange={(e) => setFormData({ ...formData, playerA: e.target.value })}
+                  className="w-full appearance-none rounded-lg border border-zinc-800 bg-[#09090b] px-4 py-3 text-sm text-white outline-none transition-colors focus:border-emerald-500"
+                >
+                  <option value="">Select registered player</option>
+                  {players.filter((player) => player.name !== formData.playerB).map((player) => (
+                    <option key={player._id} value={player.name}>
+                      {player.name}{player.country ? ` • ${player.country}` : ""}{player.rank ? ` • Rank ${player.rank}` : ""}
+                    </option>
+                  ))}
+                </select>
               </div>
               
               <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-[10px] font-bold text-zinc-400 shrink-0 mt-5 z-10 md:absolute md:left-1/2 md:-translate-x-1/2 md:top-[22px]">
@@ -172,13 +188,27 @@ export default function CreateMatchPage() {
 
               <div className="w-full space-y-1.5">
                 <label className="text-xs font-medium text-zinc-400">Player B</label>
-                <input 
-                  type="text" required value={formData.playerB} onChange={(e) => setFormData({...formData, playerB: e.target.value})}
-                  placeholder="e.g. Judd Trump" 
-                  className="w-full bg-[#09090b] border border-zinc-800 rounded-lg px-4 py-3 text-sm text-white focus:border-emerald-500 outline-none transition-colors" 
-                />
+                <select
+                  required
+                  value={formData.playerB}
+                  onChange={(e) => setFormData({ ...formData, playerB: e.target.value })}
+                  className="w-full appearance-none rounded-lg border border-zinc-800 bg-[#09090b] px-4 py-3 text-sm text-white outline-none transition-colors focus:border-emerald-500"
+                >
+                  <option value="">Select registered player</option>
+                  {players.filter((player) => player.name !== formData.playerA).map((player) => (
+                    <option key={player._id} value={player.name}>
+                      {player.name}{player.country ? ` • ${player.country}` : ""}{player.rank ? ` • Rank ${player.rank}` : ""}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
+            <p className="mt-4 text-xs text-zinc-500">
+              Players must be created first in the player manager before they can be assigned to a match.
+              <Link href="/admin/players/create" className="ml-2 text-emerald-500 hover:text-emerald-400">
+                Create player
+              </Link>
+            </p>
           </div>
 
           {/* Section 2: Match Format */}

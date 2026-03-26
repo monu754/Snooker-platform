@@ -3,10 +3,15 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
-import { Play, Activity, CalendarDays, ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { Play, Activity, CalendarDays, ChevronLeft, ChevronRight, Search, Bell, Library, LayoutGrid, Trophy, BarChart3 } from "lucide-react";
+import { readOfflineCache, writeOfflineCache } from "../lib/offline-cache";
+
+const MATCHES_CACHE_KEY = "snooker.offline.matches";
+const SETTINGS_CACHE_KEY = "snooker.offline.settings";
 
 export default function HomePage() {
   const { data: session, status } = useSession();
+  const [hasMounted, setHasMounted] = useState(false);
   
   const [liveMatches, setLiveMatches] = useState<any[]>([]);
   const [scheduledMatches, setScheduledMatches] = useState<any[]>([]);
@@ -17,6 +22,16 @@ export default function HomePage() {
   const [registrationAllowed, setRegistrationAllowed] = useState(true);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [announcement, setAnnouncement] = useState("");
+  const [favoritePlayers, setFavoritePlayers] = useState<string[]>([]);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [notificationSupported, setNotificationSupported] = useState(false);
+  const [notificationNotice, setNotificationNotice] = useState("");
+  const [notificationBusy, setNotificationBusy] = useState(false);
+  const [showingOfflineSnapshot, setShowingOfflineSnapshot] = useState(false);
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
 
   // Auto advance slides every 5 seconds
   useEffect(() => {
@@ -30,12 +45,27 @@ export default function HomePage() {
   useEffect(() => {
     const fetchLatestData = () => {
       fetch("/api/matches", { cache: "no-store" }) 
-        .then(res => res.json())
+        .then(res => {
+          if (!res.ok) {
+            throw new Error("Unable to load matches");
+          }
+          return res.json();
+        })
         .then(data => {
           const matches = data.matches || [];
           setLiveMatches(matches.filter((m: any) => m.status === 'live' || m.status === 'paused'));
           setScheduledMatches(matches.filter((m: any) => m.status === 'scheduled'));
           setCompletedMatches(matches.filter((m: any) => m.status === 'finished').slice(-20).reverse());
+          writeOfflineCache(MATCHES_CACHE_KEY, matches);
+          setShowingOfflineSnapshot(false);
+          setIsLoading(false);
+        })
+        .catch(() => {
+          const cachedMatches = readOfflineCache<any[]>(MATCHES_CACHE_KEY, []);
+          setLiveMatches(cachedMatches.filter((m: any) => m.status === 'live' || m.status === 'paused'));
+          setScheduledMatches(cachedMatches.filter((m: any) => m.status === 'scheduled'));
+          setCompletedMatches(cachedMatches.filter((m: any) => m.status === 'finished').slice(-20).reverse());
+          setShowingOfflineSnapshot(cachedMatches.length > 0);
           setIsLoading(false);
         });
     };
@@ -47,14 +77,167 @@ export default function HomePage() {
 
   useEffect(() => {
     fetch("/api/settings", { cache: "no-store" })
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error("Unable to load settings");
+        }
+        return res.json();
+      })
       .then((data) => {
         setRegistrationAllowed(data.allowRegistration !== false);
         setMaintenanceMode(Boolean(data.maintenanceMode));
         setAnnouncement(data.globalAnnouncement || "");
+        writeOfflineCache(SETTINGS_CACHE_KEY, data);
       })
-      .catch(() => {});
+      .catch(() => {
+        const cachedSettings = readOfflineCache<{ allowRegistration?: boolean; maintenanceMode?: boolean; globalAnnouncement?: string }>(
+          SETTINGS_CACHE_KEY,
+          {},
+        );
+        setRegistrationAllowed(cachedSettings.allowRegistration !== false);
+        setMaintenanceMode(Boolean(cachedSettings.maintenanceMode));
+        setAnnouncement(cachedSettings.globalAnnouncement || "");
+      });
   }, []);
+
+  useEffect(() => {
+    if (!session?.user) return;
+
+    fetch("/api/user/profile", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => setFavoritePlayers(data?.user?.favoritePlayers || []))
+      .catch(() => {});
+  }, [session?.user]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("Notification" in window) || !("serviceWorker" in navigator)) {
+      setNotificationSupported(false);
+      setNotificationsEnabled(false);
+      return;
+    }
+
+    setNotificationSupported(true);
+    navigator.serviceWorker.ready
+      .then((registration) => registration.pushManager.getSubscription())
+      .then((subscription) => {
+        setNotificationsEnabled(Boolean(subscription) && Notification.permission === "granted");
+      })
+      .catch(() => {
+        setNotificationsEnabled(false);
+      });
+  }, []);
+
+  const syncExistingSubscriptionState = async () => {
+    if (typeof window === "undefined" || !("serviceWorker" in navigator)) {
+      return;
+    }
+
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription();
+    setNotificationsEnabled(Boolean(subscription) && Notification.permission === "granted");
+  };
+
+  const requestNotifications = async () => {
+    if (!session?.user) {
+      setNotificationNotice("Sign in first so alerts can be linked to your favorite players.");
+      return;
+    }
+
+    if (typeof window === "undefined" || !("Notification" in window) || !("serviceWorker" in navigator)) {
+      setNotificationNotice("This browser does not support notifications.");
+      setNotificationSupported(false);
+      setNotificationsEnabled(false);
+      return;
+    }
+
+    setNotificationNotice("");
+    setNotificationBusy(true);
+
+    try {
+      const permission = await Notification.requestPermission();
+      const granted = permission === "granted";
+      setNotificationSupported(true);
+
+      if (!granted) {
+        setNotificationNotice(
+          permission === "denied"
+            ? "Notifications are blocked in this browser. Allow them in browser settings and try again."
+            : "Notification permission was dismissed.",
+        );
+        return;
+      }
+
+      const keyRes = await fetch("/api/push/public-key", { cache: "no-store" });
+      const keyData = await keyRes.json().catch(() => ({}));
+      if (!keyRes.ok || !keyData.publicKey) {
+        throw new Error(keyData.error || "Push alerts are not configured on the server.");
+      }
+
+      const registration = await navigator.serviceWorker.ready;
+      const existingSubscription = await registration.pushManager.getSubscription();
+      const subscription =
+        existingSubscription ||
+        (await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(keyData.publicKey),
+        }));
+
+      const saveRes = await fetch("/api/push/subscription", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subscription: subscription.toJSON() }),
+      });
+      const saveData = await saveRes.json().catch(() => ({}));
+      if (!saveRes.ok) {
+        throw new Error(saveData.error || "Unable to enable push alerts.");
+      }
+
+      setNotificationsEnabled(true);
+      setNotificationNotice(
+        favoritePlayers.length > 0
+          ? "Background push alerts are enabled. You will get alerts even when the app is not open."
+          : "Background push alerts are enabled. Add favorite players in your profile to receive live alerts.",
+      );
+    } catch {
+      setNotificationSupported(false);
+      setNotificationsEnabled(false);
+      setNotificationNotice("Failed to enable background push alerts in this browser.");
+    } finally {
+      setNotificationBusy(false);
+    }
+  };
+
+  const disableNotifications = async () => {
+    if (typeof window === "undefined" || !("serviceWorker" in navigator)) {
+      return;
+    }
+
+    setNotificationBusy(true);
+    setNotificationNotice("");
+
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+
+      if (subscription) {
+        await fetch("/api/push/subscription", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ endpoint: subscription.endpoint }),
+        }).catch(() => {});
+
+        await subscription.unsubscribe();
+      }
+
+      setNotificationsEnabled(false);
+      setNotificationNotice("Background push alerts have been disabled.");
+    } catch {
+      setNotificationNotice("Failed to disable background push alerts in this browser.");
+    } finally {
+      setNotificationBusy(false);
+      syncExistingSubscriptionState().catch(() => {});
+    }
+  };
 
   // Filter matches based on search query
   const filteredLiveMatches = liveMatches.filter((match) => 
@@ -81,11 +264,23 @@ export default function HomePage() {
             <Link href="#live" className="text-zinc-300 hover:text-white font-medium transition-colors">Live Matches</Link>
             <Link href="#schedule" className="text-zinc-300 hover:text-white font-medium transition-colors">Upcoming</Link>
             <Link href="#history" className="text-zinc-300 hover:text-white font-medium transition-colors">History</Link>
+            <Link href="/players" className="text-zinc-300 hover:text-white font-medium transition-colors">Players</Link>
+            <Link href="/analytics" className="text-zinc-300 hover:text-white font-medium transition-colors">Analytics</Link>
           </nav>
         </div>
         
         <div className="flex items-center gap-4">
-          {status === "loading" ? (
+          <div className="hidden lg:flex items-center gap-2">
+            <Link href="/multi-stream" className="rounded-full border border-zinc-800 px-4 py-2 text-sm text-zinc-300 hover:border-zinc-700 hover:text-white">
+              <LayoutGrid size={14} className="mr-2 inline-block" />
+              Multi-Stream
+            </Link>
+            <Link href="/vod" className="rounded-full border border-zinc-800 px-4 py-2 text-sm text-zinc-300 hover:border-zinc-700 hover:text-white">
+              <Library size={14} className="mr-2 inline-block" />
+              VOD
+            </Link>
+          </div>
+          {!hasMounted || status === "loading" ? (
              <div className="w-8 h-8 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin"></div>
           ) : session ? (
             <div className="flex items-center gap-4">
@@ -199,14 +394,15 @@ export default function HomePage() {
                           {match.status === 'live' ? 'Live Now' : (match.status === 'finished' ? 'Match Finished' : 'Paused')}
                         </span>
                       </div>
-                                            <h1 className="text-3xl md:text-6xl lg:text-7xl xl:text-8xl font-black text-white leading-tight md:leading-none tracking-tighter mb-4 drop-shadow-[0_4px_12px_rgba(0,0,0,1)]">
+                      <h1 className="text-3xl md:text-6xl lg:text-7xl xl:text-8xl font-black text-white leading-tight md:leading-none tracking-tighter mb-4 drop-shadow-[0_4px_12px_rgba(0,0,0,1)]">
                         {match.playerA} <span className="text-zinc-400 font-medium px-1 md:px-2 text-xl md:text-4xl">vs</span> {match.playerB}
-                        {match.status === 'finished' && match.winner && (
-                          <div className="mt-2 text-2xl md:text-4xl text-emerald-400 flex items-center gap-2 drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]">
-                             🏆 <span className="uppercase tracking-widest">{match.winner} WON</span>
-                          </div>
-                        )}
                       </h1>
+                      {match.status === "finished" && match.winner && (
+                        <div className="mb-4 flex items-center gap-2 text-2xl text-emerald-400 drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] md:text-4xl">
+                          <Trophy className="h-7 w-7 md:h-10 md:w-10" />
+                          <span className="uppercase tracking-widest">{match.winner} won</span>
+                        </div>
+                      )}
                                            <div className="flex items-center gap-4 md:gap-6 mb-6 md:mb-8 text-lg md:text-2xl font-bold">
                         <div className="flex items-baseline gap-2 drop-shadow-[0_4px_8px_rgba(0,0,0,1)]">
                           <span className={`truncate max-w-[100px] md:max-w-[150px] ${match.winner === match.playerA ? 'text-emerald-400' : 'text-white'}`}>{match.playerA}</span>
@@ -277,6 +473,56 @@ export default function HomePage() {
 
       {/* Main Content Areas */}
       <main className="max-w-[1600px] mx-auto px-4 md:px-8 py-16 space-y-20">
+        {showingOfflineSnapshot && (
+          <section className="rounded-2xl border border-blue-500/20 bg-blue-500/10 px-5 py-4 text-sm text-blue-200">
+            You are viewing the latest cached home feed. Scores and schedules will refresh automatically when the connection returns.
+          </section>
+        )}
+        <section className="grid gap-4 md:grid-cols-4">
+          <Link href="/players" className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 text-zinc-300 hover:border-zinc-700">
+            <Trophy className="mb-3 text-emerald-400" />
+            <h3 className="font-bold text-white">Advanced Player Search</h3>
+            <p className="mt-2 text-sm text-zinc-400">Search by name, ranking, and country from the player directory.</p>
+          </Link>
+          <Link href="/analytics" className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 text-zinc-300 hover:border-zinc-700">
+            <BarChart3 className="mb-3 text-blue-400" />
+            <h3 className="font-bold text-white">Analytics Suite</h3>
+            <p className="mt-2 text-sm text-zinc-400">Review win rate, scoring visits, and event-derived player metrics.</p>
+          </Link>
+          <Link href="/multi-stream" className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 text-zinc-300 hover:border-zinc-700">
+            <LayoutGrid className="mb-3 text-amber-400" />
+            <h3 className="font-bold text-white">Multi-Stream Wall</h3>
+            <p className="mt-2 text-sm text-zinc-400">Watch multiple live tables side by side based on your subscription tier.</p>
+          </Link>
+          <Link href="/profile" className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 text-zinc-300 hover:border-zinc-700">
+            <Bell className="mb-3 text-rose-400" />
+            <h3 className="font-bold text-white">Buy Premium</h3>
+            <p className="mt-2 text-sm text-zinc-400">Upgrade a viewer account to Plus or Pro for more streams and premium viewing features.</p>
+          </Link>
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 text-zinc-300">
+            <Bell className="mb-3 text-emerald-400" />
+            <h3 className="font-bold text-white">Favorite Player Alerts</h3>
+            <p className="mt-2 text-sm text-zinc-400">Enable true background browser push alerts to get notified when your favorite players go live.</p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={notificationsEnabled ? disableNotifications : requestNotifications}
+                className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:bg-zinc-800 disabled:text-zinc-500"
+                disabled={(!notificationSupported && hasMounted) || notificationBusy}
+              >
+                {notificationBusy ? "Updating..." : notificationsEnabled ? "Disable Alerts" : "Enable Alerts"}
+              </button>
+            </div>
+            {notificationNotice && (
+              <p className="mt-3 text-xs text-zinc-400">{notificationNotice}</p>
+            )}
+            {!notificationsEnabled && favoritePlayers.length === 0 && (
+              <p className="mt-2 text-xs text-zinc-500">
+                Add favorite players in <Link href="/profile" className="text-emerald-400 hover:text-emerald-300">your profile</Link> to receive live alerts.
+              </p>
+            )}
+          </div>
+        </section>
         
         {/* Search Bar Section */}
         <div className="relative max-w-2xl mx-auto -mt-6 px-4 md:px-0">
@@ -406,7 +652,7 @@ export default function HomePage() {
                <span className={`font-bold truncate max-w-[150px] ${
                  (match.winner === match.playerA || (match.status === 'finished' && match.framesWonA > match.framesWonB)) ? 'text-emerald-400' : 'text-white'
                }`}>
-                 {match.playerA} {(match.winner === match.playerA || (match.status === 'finished' && match.framesWonA > match.framesWonB)) && '🏆'}
+                 {match.playerA} {(match.winner === match.playerA || (match.status === 'finished' && match.framesWonA > match.framesWonB)) && 'Trophy'}
                </span>
                {!isScheduled && <span className={`font-black ${
                  (match.winner === match.playerA || (match.status === 'finished' && match.framesWonA > match.framesWonB)) ? 'text-emerald-400' : 'text-zinc-500'
@@ -416,7 +662,7 @@ export default function HomePage() {
                <span className={`font-bold truncate max-w-[150px] ${
                  (match.winner === match.playerB || (match.status === 'finished' && match.framesWonB > match.framesWonA)) ? 'text-emerald-400' : 'text-zinc-400'
                }`}>
-                 {match.playerB} {(match.winner === match.playerB || (match.status === 'finished' && match.framesWonB > match.framesWonA)) && '🏆'}
+                 {match.playerB} {(match.winner === match.playerB || (match.status === 'finished' && match.framesWonB > match.framesWonA)) && 'Trophy'}
                </span>
                {!isScheduled && <span className={`font-black ${
                  (match.winner === match.playerB || (match.status === 'finished' && match.framesWonB > match.framesWonA)) ? 'text-emerald-400' : 'text-zinc-500'
@@ -433,4 +679,17 @@ export default function HomePage() {
        </div>
     </Link>
   );
+}
+
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+
+  for (let i = 0; i < rawData.length; i += 1) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+
+  return outputArray;
 }
