@@ -29,3 +29,5 @@ apps/**/out
 .idea
 .gemini
 tmp
+.tools
+infra/terraform/.terraform/

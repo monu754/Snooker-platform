@@ -306,10 +306,10 @@ resource "aws_cloudwatch_dashboard" "app" {
         width  = 12
         height = 6
         properties = {
-          title   = "ALB 4XX and 5XX Responses"
-          region  = var.aws_region
-          stat    = "Sum"
-          period  = 300
+          title  = "ALB 4XX and 5XX Responses"
+          region = var.aws_region
+          stat   = "Sum"
+          period = 300
           metrics = [
             ["AWS/ApplicationELB", "HTTPCode_ELB_4XX_Count", "LoadBalancer", aws_lb.app.arn_suffix],
             [".", "HTTPCode_ELB_5XX_Count", ".", "."],
