@@ -12,6 +12,10 @@ import {
 import { sanitizeChatText } from "../lib/chat-moderation.ts";
 import { generateBracket } from "../lib/brackets.ts";
 
+function futureIso(daysAhead = 7) {
+  return new Date(Date.now() + daysAhead * 24 * 60 * 60 * 1000).toISOString();
+}
+
 test("validateRegistrationInput normalizes and validates", () => {
   const result = validateRegistrationInput({
     name: "  Ronnie  ",
@@ -40,8 +44,9 @@ test("validateMatchInput validates required production fields", () => {
     playerB: "B",
     format: "standard",
     totalFrames: 7,
-    scheduledTime: "2026-03-22T10:00:00.000Z",
+    scheduledTime: futureIso(),
     venue: "Crucible",
+    umpireId: "ump-1",
     streamUrl: "https://youtube.com/watch?v=abcdefghijk",
     thumbnailUrl: "https://example.com/match.jpg",
   });
@@ -61,6 +66,7 @@ test("validateMatchInput rejects matches scheduled in the past", () => {
         totalFrames: 7,
         scheduledTime: "2020-03-22T10:00:00.000Z",
         venue: "Crucible",
+        umpireId: "ump-1",
       }),
     /cannot be in the past/i,
   );

@@ -5,6 +5,10 @@ import {
   runAdminDeleteMatchWorkflow,
 } from "../../lib/workflows/admin-match-management.ts";
 
+function futureIso(daysAhead = 7) {
+  return new Date(Date.now() + daysAhead * 24 * 60 * 60 * 1000).toISOString();
+}
+
 function buildDeps(overrides?: Partial<Parameters<typeof runAdminCreateMatchWorkflow>[1]>) {
   return {
     areRegisteredPlayers: async () => true,
@@ -26,8 +30,9 @@ function createPayload(overrides?: Partial<Record<string, unknown>>) {
     playerB: "Player Two",
     format: "best-of-7",
     totalFrames: 7,
-    scheduledTime: "2026-03-26T12:00:00.000Z",
+    scheduledTime: futureIso(),
     venue: "Main Arena",
+    umpireId: "ump-1",
     ...overrides,
   };
 }
