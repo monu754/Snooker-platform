@@ -6,6 +6,10 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Lock, Mail, Activity, AlertCircle, ArrowLeft, Eye, EyeOff } from "lucide-react";
 
+function RequiredMark() {
+  return <span aria-hidden="true" className="text-red-400">*</span>;
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -91,7 +95,7 @@ export default function LoginPage() {
         {/* Umpire / Admin Credentials Form */}
         <form onSubmit={handleCredentialsLogin} className="space-y-4 mb-6">
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-400 ml-1">Email Address</label>
+            <label className="text-xs font-medium text-zinc-400 ml-1 flex items-center gap-1">Email Address <RequiredMark /></label>
             <div className="relative">
               <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" size={16} />
               <input 
@@ -106,7 +110,7 @@ export default function LoginPage() {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-400 ml-1">Password</label>
+            <label className="text-xs font-medium text-zinc-400 ml-1 flex items-center gap-1">Password <RequiredMark /></label>
             <div className="relative">
               <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" size={16} />
               <input 
@@ -135,6 +139,7 @@ export default function LoginPage() {
           >
             {loading ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : "Sign In with Email"}
           </button>
+          <p className="text-xs text-zinc-500"><RequiredMark /> Required fields</p>
         </form>
 
         <div className="relative flex items-center justify-center my-6">

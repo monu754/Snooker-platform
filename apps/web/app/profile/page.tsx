@@ -8,6 +8,10 @@ import { User, Mail, Lock, CheckCircle, AlertCircle, ArrowLeft, Camera, Loader2,
 import { canPurchasePremium } from "../../lib/access";
 import { SUBSCRIPTION_PRICING } from "../../lib/subscriptions";
 
+function RequiredMark() {
+  return <span aria-hidden="true" className="text-red-400">*</span>;
+}
+
 type ProfileMeta = {
   createdAt: string;
   updatedAt: string;
@@ -293,7 +297,7 @@ export default function ProfilePage() {
 
                 <form onSubmit={handleUpdate} className="space-y-6">
                   <div className="space-y-2">
-                    <label className="text-sm font-bold text-zinc-400 uppercase tracking-wider ml-1">Full Name</label>
+                    <label className="text-sm font-bold text-zinc-400 uppercase tracking-wider ml-1 flex items-center gap-1">Full Name <RequiredMark /></label>
                     <div className="relative group">
                       <User size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-emerald-500 transition-colors" />
                       <input 
@@ -466,6 +470,7 @@ export default function ProfilePage() {
                   </div>
 
                   <div className="pt-4 flex items-center justify-end gap-4">
+                    <p className="mr-auto text-xs text-zinc-600"><RequiredMark /> Required fields</p>
                     <Link href="/" className="text-zinc-500 hover:text-white font-medium text-sm transition-colors">
                       Discard Changes
                     </Link>

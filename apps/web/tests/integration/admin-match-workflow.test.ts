@@ -50,6 +50,17 @@ test("admin match workflow rejects unknown players", async () => {
   assert.equal(result.status, 400);
 });
 
+test("admin match workflow rejects past scheduled matches", async () => {
+  await assert.rejects(
+    () =>
+      runAdminCreateMatchWorkflow(
+        createPayload({ scheduledTime: "2020-03-26T12:00:00.000Z" }),
+        buildDeps(),
+      ),
+    /cannot be in the past/i,
+  );
+});
+
 test("admin match workflow creates a match and emails a newly assigned umpire", async () => {
   let emailed = false;
 

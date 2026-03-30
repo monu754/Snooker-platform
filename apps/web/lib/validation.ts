@@ -116,6 +116,14 @@ function optionalUrlArray(value: unknown, label: string, maxItems = schemaRules.
     .filter(Boolean);
 }
 
+function ensureScheduledTimeNotInPast(date: Date, label = "Scheduled time") {
+  if (date.getTime() < Date.now()) {
+    throw new ValidationError(`${label} cannot be in the past`);
+  }
+
+  return date;
+}
+
 export function validateRegistrationInput(input: unknown) {
   const payload = (input ?? {}) as Record<string, unknown>;
 
@@ -168,8 +176,9 @@ export function validatePlayerProfileInput(input: unknown) {
   const payload = (input ?? {}) as Record<string, unknown>;
 
   const name = requireTrimmedString(payload.name, "Player name", { maxLength: schemaRules.playerProfile.nameMaxLength });
-  const country =
-    payload.country === undefined ? "" : optionalTrimmedString(payload.country, { maxLength: schemaRules.playerProfile.countryMaxLength });
+  const country = requireTrimmedString(payload.country, "Country", {
+    maxLength: schemaRules.playerProfile.countryMaxLength,
+  });
   const bio = payload.bio === undefined ? "" : optionalTrimmedString(payload.bio, { maxLength: schemaRules.playerProfile.bioMaxLength });
 
   let rank: number | undefined;
@@ -204,6 +213,8 @@ export function validateMatchInput(input: unknown) {
     throw new ValidationError("Scheduled time is invalid");
   }
 
+  ensureScheduledTimeNotInPast(date);
+
   return {
     title: requireTrimmedString(payload.title, "Title", { maxLength: schemaRules.match.titleMaxLength }),
     playerA: requireTrimmedString(payload.playerA, "Player A", { maxLength: schemaRules.match.playerNameMaxLength }),
@@ -216,8 +227,7 @@ export function validateMatchInput(input: unknown) {
     secondaryStreamUrls: optionalUrlArray(payload.secondaryStreamUrls, "Secondary Stream URL"),
     vodUrl: optionalUrl(payload.vodUrl, "VOD URL"),
     thumbnailUrl: optionalUrl(payload.thumbnailUrl, "Thumbnail URL"),
-    umpireId:
-      payload.umpireId && typeof payload.umpireId === "string" ? payload.umpireId.trim() : "",
+    umpireId: requireTrimmedString(payload.umpireId, "Umpire"),
   };
 }
 
@@ -280,7 +290,7 @@ export function validateMatchPatchInput(input: unknown) {
     if (Number.isNaN(date.getTime())) {
       throw new ValidationError("Scheduled time is invalid");
     }
-    updates.scheduledTime = date;
+    updates.scheduledTime = ensureScheduledTimeNotInPast(date);
   }
 
   for (const numericField of ["scoreA", "scoreB", "framesWonA", "framesWonB"] as const) {

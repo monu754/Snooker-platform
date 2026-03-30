@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Clock3, Trophy } from "lucide-react";
-import { getEmbedUrl } from "../../lib/stream-embed";
+import { getStreamEmbed } from "../../lib/stream-embed";
 import { readOfflineCache, writeOfflineCache } from "../../lib/offline-cache";
 
 type VodMatch = {
@@ -65,9 +65,7 @@ export default function VodPage() {
           {matches.map((match) => (
             <div key={match._id} className="grid gap-4 rounded-2xl border border-zinc-800 bg-zinc-900 p-4 lg:grid-cols-[1.2fr,0.8fr]">
               <div className="overflow-hidden rounded-xl border border-zinc-800">
-                <div className="aspect-video">
-                  <iframe src={getEmbedUrl(match.playbackUrl, typeof window !== "undefined" ? window.location.hostname : "localhost")} className="h-full w-full" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen title={`${match.playerA} vs ${match.playerB}`}></iframe>
-                </div>
+                <VodPlayer match={match} />
               </div>
               <div className="p-2">
                 <h2 className="text-xl font-bold">{match.playerA} vs {match.playerB}</h2>
@@ -101,6 +99,28 @@ export default function VodPage() {
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+function VodPlayer({ match }: { match: VodMatch }) {
+  const embed = getStreamEmbed(match.playbackUrl, typeof window !== "undefined" ? window.location.hostname : "localhost");
+
+  if (!embed) {
+    return <div className="aspect-video bg-zinc-950" />;
+  }
+
+  if (embed.type === "video") {
+    return (
+      <div className="aspect-video">
+        <video src={embed.embedUrl} controls playsInline className="h-full w-full bg-black object-contain" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="aspect-video">
+      <iframe src={embed.embedUrl} className="h-full w-full" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen title={`${match.playerA} vs ${match.playerB}`}></iframe>
     </div>
   );
 }

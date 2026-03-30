@@ -5,6 +5,10 @@ import Link from "next/link";
 import { Eye, EyeOff, ArrowLeft } from "lucide-react";
 import { signIn } from "next-auth/react";
 
+function RequiredMark() {
+  return <span aria-hidden="true" className="text-red-400">*</span>;
+}
+
 export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -122,15 +126,15 @@ export default function RegisterPage() {
 
         <form className="space-y-4" onSubmit={handleRegister}>
           <div className="space-y-2">
-            <label className="text-sm font-medium text-zinc-300" htmlFor="name">Full Name</label>
+            <label className="text-sm font-medium text-zinc-300 flex items-center gap-1" htmlFor="name">Full Name <RequiredMark /></label>
             <input id="name" type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Judd Trump" className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-3 text-white focus:border-emerald-500 transition-all" required />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium text-zinc-300" htmlFor="email">Email</label>
+            <label className="text-sm font-medium text-zinc-300 flex items-center gap-1" htmlFor="email">Email <RequiredMark /></label>
             <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="judd@example.com" className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-3 text-white focus:border-emerald-500 transition-all" required />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium text-zinc-300" htmlFor="password">Password</label>
+            <label className="text-sm font-medium text-zinc-300 flex items-center gap-1" htmlFor="password">Password <RequiredMark /></label>
             <div className="relative">
               <input id="password" type={showPassword ? "text" : "password"} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-3 text-white pr-12 focus:border-emerald-500 transition-all" required />
               <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 cursor-pointer">
@@ -139,7 +143,7 @@ export default function RegisterPage() {
             </div>
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium text-zinc-300" htmlFor="confirm-password">Confirm Password</label>
+            <label className="text-sm font-medium text-zinc-300 flex items-center gap-1" htmlFor="confirm-password">Confirm Password <RequiredMark /></label>
             <div className="relative">
               <input id="confirm-password" type={showConfirmPassword ? "text" : "password"} placeholder="••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className={`w-full bg-zinc-950 border rounded-lg px-4 py-3 text-white pr-12 transition-all ${isConfirmDirty && !passwordsMatch ? 'border-red-500 focus:border-red-500' : 'border-zinc-800 focus:border-emerald-500'}`} required />
               <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 cursor-pointer">
@@ -151,6 +155,7 @@ export default function RegisterPage() {
           <button type="submit" disabled={(!passwordsMatch && isConfirmDirty) || loading || !registrationAllowed || maintenanceMode} className="w-full mt-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-700 disabled:text-zinc-400 text-white font-semibold rounded-lg px-4 py-3 transition-colors duration-200 cursor-pointer flex justify-center items-center">
             {loading ? <span className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></span> : "Create Account"}
           </button>
+          <p className="text-xs text-zinc-500"><RequiredMark /> Required fields</p>
         </form>
 
         <div className="mt-6 flex items-center justify-center space-x-4">

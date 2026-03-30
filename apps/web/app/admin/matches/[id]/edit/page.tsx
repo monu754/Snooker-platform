@@ -12,6 +12,10 @@ const FORMATS = {
   championship: { total: 35, win: 18, label: "Championship (Best of 35)" },
 };
 
+function RequiredMark() {
+  return <span aria-hidden="true" className="text-red-400">*</span>;
+}
+
 type FormatKey = keyof typeof FORMATS;
 
 function toLocalDateInputValue(date: Date) {
@@ -49,6 +53,7 @@ export default function EditMatchPage() {
     streamUrl: "",
     thumbnailUrl: "",
   });
+  const minDate = toLocalDateInputValue(new Date());
 
   useEffect(() => {
     Promise.all([
@@ -66,7 +71,8 @@ export default function EditMatchPage() {
 
         const match = matchData.match;
         const scheduled = new Date(match.scheduledTime);
-        const matchedFormat = (Object.keys(FORMATS) as FormatKey[]).find((key) => FORMATS[key].total === match.totalFrames) || "standard";
+        const matchedFormat =
+          (Object.keys(FORMATS) as FormatKey[]).find((key) => FORMATS[key].total === match.totalFrames) || "standard";
 
         setFormData({
           playerA: match.playerA || "",
@@ -113,6 +119,10 @@ export default function EditMatchPage() {
 
     try {
       const scheduledDateTime = new Date(`${formData.date}T${formData.time}`).toISOString();
+      if (new Date(scheduledDateTime).getTime() < Date.now()) {
+        throw new Error("Scheduled time cannot be in the past");
+      }
+
       const res = await fetch(`/api/matches/${matchId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -165,14 +175,20 @@ export default function EditMatchPage() {
           <section className="bg-[#18181b] border border-zinc-800/50 rounded-xl p-6">
             <h2 className="text-white font-medium flex items-center gap-2 mb-6"><User size={18} className="text-emerald-500" /> Match Participants</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <select value={formData.playerA} onChange={(e) => setFormData({ ...formData, playerA: e.target.value })} className="w-full appearance-none rounded-lg border border-zinc-800 bg-[#09090b] px-4 py-3 text-sm text-white outline-none transition-colors focus:border-emerald-500">
-                <option value="">Select registered player</option>
-                {buildPlayerOptions(players, formData.playerB).map((player) => <option key={player._id} value={player.name}>{player.name}{player.country ? ` • ${player.country}` : ""}{player.rank ? ` • Rank ${player.rank}` : ""}</option>)}
-              </select>
-              <select value={formData.playerB} onChange={(e) => setFormData({ ...formData, playerB: e.target.value })} className="w-full appearance-none rounded-lg border border-zinc-800 bg-[#09090b] px-4 py-3 text-sm text-white outline-none transition-colors focus:border-emerald-500">
-                <option value="">Select registered player</option>
-                {buildPlayerOptions(players, formData.playerA).map((player) => <option key={player._id} value={player.name}>{player.name}{player.country ? ` • ${player.country}` : ""}{player.rank ? ` • Rank ${player.rank}` : ""}</option>)}
-              </select>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-zinc-400 flex items-center gap-1">Player A <RequiredMark /></label>
+                <select required value={formData.playerA} onChange={(e) => setFormData({ ...formData, playerA: e.target.value })} className="w-full appearance-none rounded-lg border border-zinc-800 bg-[#09090b] px-4 py-3 text-sm text-white outline-none transition-colors focus:border-emerald-500">
+                  <option value="">Select registered player</option>
+                  {buildPlayerOptions(players, formData.playerB).map((player) => <option key={player._id} value={player.name}>{player.name}{player.country ? ` • ${player.country}` : ""}{player.rank ? ` • Rank ${player.rank}` : ""}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-zinc-400 flex items-center gap-1">Player B <RequiredMark /></label>
+                <select required value={formData.playerB} onChange={(e) => setFormData({ ...formData, playerB: e.target.value })} className="w-full appearance-none rounded-lg border border-zinc-800 bg-[#09090b] px-4 py-3 text-sm text-white outline-none transition-colors focus:border-emerald-500">
+                  <option value="">Select registered player</option>
+                  {buildPlayerOptions(players, formData.playerA).map((player) => <option key={player._id} value={player.name}>{player.name}{player.country ? ` • ${player.country}` : ""}{player.rank ? ` • Rank ${player.rank}` : ""}</option>)}
+                </select>
+              </div>
             </div>
             <p className="mt-4 text-xs text-zinc-500">Only players already registered in the player manager can be used in matches. <Link href="/admin/players/create" className="text-emerald-500 hover:text-emerald-400">Create player</Link></p>
           </section>
@@ -180,9 +196,12 @@ export default function EditMatchPage() {
           <section className="bg-[#18181b] border border-zinc-800/50 rounded-xl p-6">
             <h2 className="text-white font-medium flex items-center gap-2 mb-6"><Trophy size={18} className="text-emerald-500" /> Match Format</h2>
             <div className="flex flex-col md:flex-row items-end gap-6">
-              <select value={formData.format} onChange={(e) => setFormData({ ...formData, format: e.target.value as FormatKey })} className="flex-1 w-full bg-[#09090b] border border-zinc-800 rounded-lg px-4 py-3 text-sm text-white focus:border-emerald-500 outline-none transition-colors appearance-none cursor-pointer">
-                {Object.entries(FORMATS).map(([key, data]) => <option key={key} value={key}>{data.label}</option>)}
-              </select>
+              <div className="flex-1 w-full space-y-1.5">
+                <label className="text-xs font-medium text-zinc-400 flex items-center gap-1">Format Template <RequiredMark /></label>
+                <select required value={formData.format} onChange={(e) => setFormData({ ...formData, format: e.target.value as FormatKey })} className="flex-1 w-full bg-[#09090b] border border-zinc-800 rounded-lg px-4 py-3 text-sm text-white focus:border-emerald-500 outline-none transition-colors appearance-none cursor-pointer">
+                  {Object.entries(FORMATS).map(([key, data]) => <option key={key} value={key}>{data.label}</option>)}
+                </select>
+              </div>
               <div className="flex items-center gap-8 px-6 py-3 bg-[#09090b] border border-zinc-800 rounded-lg text-sm text-zinc-400 h-[46px]">
                 <span>Total Frames: <strong className="text-white">{activeFormat.total}</strong></span>
                 <span>To Win: <strong className="text-emerald-500">{activeFormat.win}</strong></span>
@@ -193,9 +212,18 @@ export default function EditMatchPage() {
           <section className="bg-[#18181b] border border-zinc-800/50 rounded-xl p-6">
             <h2 className="text-white font-medium flex items-center gap-2 mb-6"><CalendarDays size={18} className="text-emerald-500" /> Schedule & Venue</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <input type="date" required value={formData.date} onChange={(e) => setFormData({ ...formData, date: e.target.value })} className="w-full bg-[#09090b] border border-zinc-800 rounded-lg px-4 py-3 text-sm text-white focus:border-emerald-500 outline-none transition-colors [color-scheme:dark]" />
-              <input type="time" required value={formData.time} onChange={(e) => setFormData({ ...formData, time: e.target.value })} className="w-full bg-[#09090b] border border-zinc-800 rounded-lg px-4 py-3 text-sm text-white focus:border-emerald-500 outline-none transition-colors [color-scheme:dark]" />
-              <input type="text" required value={formData.venue} onChange={(e) => setFormData({ ...formData, venue: e.target.value })} placeholder="Venue" className="w-full bg-[#09090b] border border-zinc-800 rounded-lg px-4 py-3 text-sm text-white focus:border-emerald-500 outline-none transition-colors" />
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-zinc-400 flex items-center gap-1">Date <RequiredMark /></label>
+                <input type="date" required min={minDate} value={formData.date} onChange={(e) => setFormData({ ...formData, date: e.target.value })} className="w-full bg-[#09090b] border border-zinc-800 rounded-lg px-4 py-3 text-sm text-white focus:border-emerald-500 outline-none transition-colors [color-scheme:dark]" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-zinc-400 flex items-center gap-1">Time (Local) <RequiredMark /></label>
+                <input type="time" required value={formData.time} onChange={(e) => setFormData({ ...formData, time: e.target.value })} className="w-full bg-[#09090b] border border-zinc-800 rounded-lg px-4 py-3 text-sm text-white focus:border-emerald-500 outline-none transition-colors [color-scheme:dark]" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-zinc-400 flex items-center gap-1">Venue <RequiredMark /></label>
+                <input type="text" required value={formData.venue} onChange={(e) => setFormData({ ...formData, venue: e.target.value })} placeholder="Venue" className="w-full bg-[#09090b] border border-zinc-800 rounded-lg px-4 py-3 text-sm text-white focus:border-emerald-500 outline-none transition-colors" />
+              </div>
             </div>
           </section>
 
@@ -239,6 +267,8 @@ export default function EditMatchPage() {
               </div>
             </div>
           </section>
+
+          <p className="text-xs text-zinc-500"><RequiredMark /> Required fields</p>
 
           <div className="flex items-center justify-end gap-4 pt-2">
             <Link href="/admin/matches" className="text-sm font-medium text-zinc-400 hover:text-white px-4 py-2 transition-colors">Cancel</Link>

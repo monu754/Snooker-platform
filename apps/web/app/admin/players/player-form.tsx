@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { ArrowLeft, Save, UserPlus } from "lucide-react";
 
+function RequiredMark() {
+  return <span aria-hidden="true" className="text-red-400">*</span>;
+}
+
 type PlayerFormData = {
   name: string;
   country: string;
@@ -53,7 +57,7 @@ export function PlayerForm({
 
         <form onSubmit={onSubmit} className="space-y-6 rounded-xl border border-zinc-800/50 bg-[#18181b] p-6 shadow-xl">
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-400">Player Name</label>
+            <label className="text-xs font-medium text-zinc-400 flex items-center gap-1">Player Name <RequiredMark /></label>
             <input
               type="text"
               required
@@ -66,9 +70,10 @@ export function PlayerForm({
 
           <div className="grid gap-6 md:grid-cols-2">
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-zinc-400">Country</label>
+              <label className="text-xs font-medium text-zinc-400 flex items-center gap-1">Country <RequiredMark /></label>
               <input
                 type="text"
+                required
                 value={formData.country}
                 onChange={(event) => onChange("country", event.target.value)}
                 placeholder="e.g. England"
@@ -98,6 +103,8 @@ export function PlayerForm({
               className="w-full resize-none rounded-lg border border-zinc-800 bg-[#09090b] px-4 py-3 text-sm text-white outline-none transition-colors focus:border-emerald-500"
             />
           </div>
+
+          <p className="text-xs text-zinc-500"><RequiredMark /> Required fields</p>
 
           <div className="flex items-center justify-end gap-4 border-t border-zinc-800 pt-4">
             <Link href={backHref} className="px-4 py-2 text-sm font-medium text-zinc-400 transition-colors hover:text-white">

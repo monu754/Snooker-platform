@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, LayoutGrid } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { getAccessLabel, getEffectiveMaxStreams } from "../../lib/access";
-import { getEmbedUrl } from "../../lib/stream-embed";
+import { getStreamEmbed } from "../../lib/stream-embed";
 import { readOfflineCache, writeOfflineCache } from "../../lib/offline-cache";
 
 type MatchData = {
@@ -118,15 +118,34 @@ export default function MultiStreamPage() {
                 <div className="border-b border-zinc-800 px-4 py-3">
                   <p className="font-semibold">{match.playerA} vs {match.playerB}</p>
                 </div>
-                <div className="aspect-video">
-                  <iframe src={getEmbedUrl(match.streamUrl || "", typeof window !== "undefined" ? window.location.hostname : "localhost")} className="h-full w-full" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen title={match.title}>
-                  </iframe>
-                </div>
+                <StreamPanel match={match} />
               </div>
             ))
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function StreamPanel({ match }: { match: MatchData }) {
+  const embed = getStreamEmbed(match.streamUrl || "", typeof window !== "undefined" ? window.location.hostname : "localhost");
+
+  if (!embed) {
+    return <div className="aspect-video bg-zinc-950" />;
+  }
+
+  if (embed.type === "video") {
+    return (
+      <div className="aspect-video">
+        <video src={embed.embedUrl} controls autoPlay muted playsInline className="h-full w-full bg-black object-contain" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="aspect-video">
+      <iframe src={embed.embedUrl} className="h-full w-full" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen title={match.title}></iframe>
     </div>
   );
 }

@@ -6,6 +6,7 @@ import "./rate-limit.test.ts";
 import "./runtime-config.test.ts";
 import "./security.test.ts";
 import "./settings.test.ts";
+import "./stream-embed.test.ts";
 import "./validation.test.ts";
 
 import "./e2e/alert-workflow.test.ts";

@@ -12,6 +12,16 @@ const FORMATS = {
   championship: { total: 35, win: 18, label: "Championship (Best of 35)" }
 };
 
+function RequiredMark() {
+  return <span aria-hidden="true" className="text-red-400">*</span>;
+}
+
+function getTodayDateInputValue() {
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 10);
+}
+
 export default function CreateMatchPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -81,6 +91,7 @@ export default function CreateMatchPage() {
   const activeFormat = FORMATS[formData.format];
 
   const [success, setSuccess] = useState("");
+  const minDate = getTodayDateInputValue();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,6 +101,9 @@ export default function CreateMatchPage() {
 
     try {
       const scheduledDateTime = new Date(`${formData.date}T${formData.time}`).toISOString();
+      if (new Date(scheduledDateTime).getTime() < Date.now()) {
+        throw new Error("Scheduled time cannot be in the past");
+      }
 
       const res = await fetch("/api/matches", {
         method: "POST",
@@ -166,7 +180,7 @@ export default function CreateMatchPage() {
             </h2>
             <div className="flex flex-col md:flex-row items-center gap-4 relative">
               <div className="w-full space-y-1.5">
-                <label className="text-xs font-medium text-zinc-400">Player A</label>
+                <label className="text-xs font-medium text-zinc-400 flex items-center gap-1">Player A <RequiredMark /></label>
                 <select
                   required
                   value={formData.playerA}
@@ -187,7 +201,7 @@ export default function CreateMatchPage() {
               </div>
 
               <div className="w-full space-y-1.5">
-                <label className="text-xs font-medium text-zinc-400">Player B</label>
+                <label className="text-xs font-medium text-zinc-400 flex items-center gap-1">Player B <RequiredMark /></label>
                 <select
                   required
                   value={formData.playerB}
@@ -218,8 +232,9 @@ export default function CreateMatchPage() {
             </h2>
             <div className="flex flex-col md:flex-row items-end gap-6">
               <div className="flex-1 w-full space-y-1.5">
-                <label className="text-xs font-medium text-zinc-400">Format Template</label>
+                <label className="text-xs font-medium text-zinc-400 flex items-center gap-1">Format Template <RequiredMark /></label>
                 <select 
+                  required
                   value={formData.format} onChange={(e) => setFormData({...formData, format: e.target.value as any})}
                   className="w-full bg-[#09090b] border border-zinc-800 rounded-lg px-4 py-3 text-sm text-white focus:border-emerald-500 outline-none transition-colors appearance-none cursor-pointer"
                 >
@@ -242,21 +257,21 @@ export default function CreateMatchPage() {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-zinc-400">Date</label>
+                <label className="text-xs font-medium text-zinc-400 flex items-center gap-1">Date <RequiredMark /></label>
                 <input 
-                  type="date" required value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})}
+                  type="date" required min={minDate} value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})}
                   className="w-full bg-[#09090b] border border-zinc-800 rounded-lg px-4 py-3 text-sm text-white focus:border-emerald-500 outline-none transition-colors [color-scheme:dark]" 
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-zinc-400">Time (Local)</label>
+                <label className="text-xs font-medium text-zinc-400 flex items-center gap-1">Time (Local) <RequiredMark /></label>
                 <input 
                   type="time" required value={formData.time} onChange={(e) => setFormData({...formData, time: e.target.value})}
                   className="w-full bg-[#09090b] border border-zinc-800 rounded-lg px-4 py-3 text-sm text-white focus:border-emerald-500 outline-none transition-colors [color-scheme:dark]" 
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-zinc-400">Venue</label>
+                <label className="text-xs font-medium text-zinc-400 flex items-center gap-1">Venue <RequiredMark /></label>
                 <input 
                   type="text" required value={formData.venue} onChange={(e) => setFormData({...formData, venue: e.target.value})}
                   placeholder="e.g. Crucible Theatre" 
@@ -273,8 +288,9 @@ export default function CreateMatchPage() {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-zinc-400">Assign Umpire</label>
+                <label className="text-xs font-medium text-zinc-400 flex items-center gap-1">Assign Umpire <RequiredMark /></label>
                 <select 
+                  required
                   value={formData.umpireId} onChange={(e) => setFormData({...formData, umpireId: e.target.value})}
                   className="w-full bg-[#09090b] border border-zinc-800 rounded-lg px-4 py-3 text-sm text-white focus:border-emerald-500 outline-none transition-colors appearance-none cursor-pointer"
                 >
@@ -412,6 +428,8 @@ export default function CreateMatchPage() {
               </div>
             </div>
           </div>
+
+          <p className="text-xs text-zinc-500"><RequiredMark /> Required fields</p>
 
           {/* Action Bar */}
           <div className="flex items-center justify-end gap-4 pt-2">

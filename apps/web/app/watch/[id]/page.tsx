@@ -7,6 +7,7 @@ import { signOut, useSession } from "next-auth/react";
 import { Activity, ChevronLeft, Circle, MessageSquare, PlayCircle, Trophy, Users } from "lucide-react";
 import { getPusherClient } from "../../../lib/pusher";
 import { readOfflineCache, writeOfflineCache } from "../../../lib/offline-cache";
+import { getStreamEmbed } from "../../../lib/stream-embed";
 
 type EventLog = { id: string; time: string; player: "A" | "B" | "system"; action: string; points: string; type: "score" | "foul" | "system" };
 type MentionUser = { id: string; name: string; handle: string; role: string; image?: string };
@@ -518,23 +519,8 @@ function renderChatText(text: string) {
   return parts.map((part: string, index: number) => part.startsWith("@") ? <span key={`${part}-${index}`} className="font-semibold text-emerald-400">{part}</span> : <span key={`${part}-${index}`}>{part}</span>);
 }
 
-function getEmbedUrl(url: string): { type: "youtube" | "twitch" | "video" | "iframe"; embedUrl: string } | null {
-  if (!url) return null;
-  const normalizedUrl = url.trim();
-  const youtubeMatch = normalizedUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([A-Za-z0-9_-]{11})/);
-  if (youtubeMatch) return { type: "youtube", embedUrl: `https://www.youtube.com/embed/${youtubeMatch[1]}?autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1` };
-  if (normalizedUrl.includes("youtube.com/embed/")) return { type: "youtube", embedUrl: normalizedUrl };
-  const twitchChannel = normalizedUrl.match(/twitch\.tv\/([^"&?/\s]+)/);
-  if (twitchChannel) {
-    const hostname = typeof window !== "undefined" ? window.location.hostname : "localhost";
-    return { type: "twitch", embedUrl: `https://player.twitch.tv/?channel=${twitchChannel[1]}&parent=${hostname}&autoplay=true&muted=true` };
-  }
-  if (normalizedUrl.match(/\.(mp4|webm|ogg|m3u8)(\?.*)?$/i)) return { type: "video", embedUrl: normalizedUrl };
-  return { type: "iframe", embedUrl: normalizedUrl };
-}
-
 function StreamPlayer({ streamUrl, matchStatus }: { streamUrl: string | null; matchStatus?: string }) {
-  const embed = streamUrl ? getEmbedUrl(streamUrl) : null;
+  const embed = streamUrl ? getStreamEmbed(streamUrl, typeof window !== "undefined" ? window.location.hostname : "localhost", true) : null;
   if (!embed) {
     return (
       <div className="relative w-full aspect-video bg-zinc-950 rounded-2xl overflow-hidden border border-zinc-800 shadow-2xl flex flex-col items-center justify-center gap-4">

@@ -127,6 +127,45 @@ export default function HomePage() {
       });
   }, []);
 
+  useEffect(() => {
+    if (!session?.user) {
+      return;
+    }
+
+    if (typeof window === "undefined" || !("Notification" in window) || !("serviceWorker" in navigator)) {
+      return;
+    }
+
+    if (Notification.permission !== "granted") {
+      return;
+    }
+
+    let cancelled = false;
+
+    navigator.serviceWorker.ready
+      .then((registration) => registration.pushManager.getSubscription())
+      .then(async (subscription) => {
+        if (!subscription || cancelled) {
+          return;
+        }
+
+        const syncResult = await syncSubscriptionWithServer(subscription);
+        if (!cancelled) {
+          setNotificationSupported(true);
+          setNotificationsEnabled(syncResult);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setNotificationsEnabled(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user]);
+
   const syncExistingSubscriptionState = async () => {
     if (typeof window === "undefined" || !("serviceWorker" in navigator)) {
       return;
@@ -135,6 +174,21 @@ export default function HomePage() {
     const registration = await navigator.serviceWorker.ready;
     const subscription = await registration.pushManager.getSubscription();
     setNotificationsEnabled(Boolean(subscription) && Notification.permission === "granted");
+  };
+
+  const syncSubscriptionWithServer = async (subscription: PushSubscription) => {
+    const saveRes = await fetch("/api/push/subscription", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subscription: subscription.toJSON() }),
+    });
+
+    if (!saveRes.ok) {
+      const saveData = await saveRes.json().catch(() => ({}));
+      throw new Error(saveData.error || "Unable to enable push alerts.");
+    }
+
+    return true;
   };
 
   const requestNotifications = async () => {
@@ -182,15 +236,7 @@ export default function HomePage() {
           applicationServerKey: urlBase64ToUint8Array(keyData.publicKey),
         }));
 
-      const saveRes = await fetch("/api/push/subscription", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subscription: subscription.toJSON() }),
-      });
-      const saveData = await saveRes.json().catch(() => ({}));
-      if (!saveRes.ok) {
-        throw new Error(saveData.error || "Unable to enable push alerts.");
-      }
+      await syncSubscriptionWithServer(subscription);
 
       setNotificationsEnabled(true);
       setNotificationNotice(
@@ -198,10 +244,12 @@ export default function HomePage() {
           ? "Background push alerts are enabled. You will get alerts even when the app is not open."
           : "Background push alerts are enabled. Add favorite players in your profile to receive live alerts.",
       );
-    } catch {
-      setNotificationSupported(false);
+    } catch (error) {
+      setNotificationSupported(true);
       setNotificationsEnabled(false);
-      setNotificationNotice("Failed to enable background push alerts in this browser.");
+      setNotificationNotice(
+        error instanceof Error ? error.message : "Failed to enable background push alerts in this browser.",
+      );
     } finally {
       setNotificationBusy(false);
     }

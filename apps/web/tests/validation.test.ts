@@ -50,6 +50,22 @@ test("validateMatchInput validates required production fields", () => {
   assert.equal(result.venue, "Crucible");
 });
 
+test("validateMatchInput rejects matches scheduled in the past", () => {
+  assert.throws(
+    () =>
+      validateMatchInput({
+        title: "A vs B",
+        playerA: "A",
+        playerB: "B",
+        format: "standard",
+        totalFrames: 7,
+        scheduledTime: "2020-03-22T10:00:00.000Z",
+        venue: "Crucible",
+      }),
+    /cannot be in the past/i,
+  );
+});
+
 test("validateMatchPatchInput only accepts known fields", () => {
   const result = validateMatchPatchInput({
     status: "live",
@@ -61,6 +77,13 @@ test("validateMatchPatchInput only accepts known fields", () => {
     status: "live",
     streamUrl: "https://example.com/live",
   });
+});
+
+test("validateMatchPatchInput rejects past scheduled updates", () => {
+  assert.throws(
+    () => validateMatchPatchInput({ scheduledTime: "2020-03-22T10:00:00.000Z" }),
+    /cannot be in the past/i,
+  );
 });
 
 test("validateChatMessageInput trims message text", () => {

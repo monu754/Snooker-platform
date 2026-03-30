@@ -5,6 +5,10 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, UserPlus, Mail, User, KeyRound } from "lucide-react";
 
+function RequiredMark() {
+  return <span aria-hidden="true" className="text-red-400">*</span>;
+}
+
 export default function RegisterUmpirePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -76,7 +80,7 @@ export default function RegisterUmpirePage() {
         <form onSubmit={handleSubmit} className="bg-[#18181b] border border-zinc-800/50 rounded-xl p-6 shadow-xl space-y-6">
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-zinc-400 flex items-center gap-2">
-              <User size={14} className="text-emerald-500" /> Full Name
+              <User size={14} className="text-emerald-500" /> Full Name <RequiredMark />
             </label>
             <input 
               type="text" required value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})}
@@ -87,7 +91,7 @@ export default function RegisterUmpirePage() {
 
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-zinc-400 flex items-center gap-2">
-              <Mail size={14} className="text-blue-500" /> Official Email Address
+              <Mail size={14} className="text-blue-500" /> Official Email Address <RequiredMark />
             </label>
             <input 
               type="email" required value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})}
@@ -99,14 +103,16 @@ export default function RegisterUmpirePage() {
           {/* NEW PASSWORD FIELD */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-zinc-400 flex items-center gap-2">
-              <KeyRound size={14} className="text-orange-500" /> Login Password
+              <KeyRound size={14} className="text-orange-500" /> Login Password <RequiredMark />
             </label>
             <input 
-              type="password" required minLength={6} value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})}
-              placeholder="Minimum 6 characters" 
+              type="password" required minLength={8} value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})}
+              placeholder="Minimum 8 characters" 
               className="w-full bg-[#09090b] border border-zinc-800 rounded-lg px-4 py-3 text-sm text-white focus:border-emerald-500 outline-none transition-colors" 
             />
           </div>
+
+          <p className="text-xs text-zinc-500"><RequiredMark /> Required fields</p>
 
           <div className="pt-4 border-t border-zinc-800 flex items-center justify-end gap-4">
             <Link href="/admin/umpires" className="text-sm font-medium text-zinc-400 hover:text-white px-4 py-2 transition-colors">
