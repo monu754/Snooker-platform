@@ -13,7 +13,6 @@ const PUBLIC_API_PREFIXES = [
   "/api/vod",
   "/api/settings",
   "/api/partner/live",
-  "/api/brackets",
 ];
 const DENYLIST_PREFIXES = ["/api/auth", "/api/push", "/api/subscription", "/api/user", "/api/admin", "/admin", "/umpire", "/profile", "/login", "/register"];
 

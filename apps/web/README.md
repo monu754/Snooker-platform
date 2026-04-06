@@ -87,14 +87,13 @@ That endpoint reports:
 The metrics endpoints expose:
 
 - Prometheus-style text output for scraping
-- JSON runtime counters, histograms, and process stats for the admin observability dashboard
+- JSON runtime counters, histograms, and process stats for operational monitoring
 
 ## Production Notes
 
 - Object/external upload storage should be configured before public production launch.
 - Favorite-player notifications now use real background browser push with VAPID keys and a service worker.
 - Structured logs are emitted as JSON and warnings/errors can fan out to `ALERT_WEBHOOK_URL`.
-- Admin observability is available at `/admin/observability`, backed by `/api/health` and `/api/metrics`.
 - Cloud IaC baseline now lives under `infra/terraform` for AWS ECS/Fargate style deployment.
 - PWA support now includes an installable manifest, offline fallback page, cached public navigation, cached public API responses, and client-side snapshot fallback for the main discovery/watch pages.
 - Sensitive session-backed mutations now enforce same-origin request checks, stricter upload validation, and global security headers.

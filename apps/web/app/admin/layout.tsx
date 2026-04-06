@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { LayoutDashboard, Swords, Users, ShieldCheck, Video, Settings, LogOut, Menu, Trophy, GitBranchPlus, Activity } from "lucide-react";
+import { LayoutDashboard, Swords, Users, ShieldCheck, Video, Settings, LogOut, Menu, Trophy } from "lucide-react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -13,12 +13,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { href: "/admin", icon: <LayoutDashboard size={20} />, label: "Dashboard", exact: true },
     { href: "/admin/matches", icon: <Swords size={20} />, label: "Match Manager" },
     { href: "/admin/players", icon: <Trophy size={20} />, label: "Player Directory" },
-    { href: "/admin/brackets", icon: <GitBranchPlus size={20} />, label: "Brackets" },
     { href: "/admin/umpires", icon: <ShieldCheck size={20} />, label: "Umpire Manager" },
     { href: "/admin/users", icon: <Users size={20} />, label: "User Manager" },
     { href: "/admin/streaming", icon: <Video size={20} />, label: "Streaming Control" },
     { href: "/admin/settings", icon: <Settings size={20} />, label: "Platform Settings" },
-    { href: "/admin/observability", icon: <Activity size={20} />, label: "Observability" },
   ];
 
   const SidebarContent = () => (
