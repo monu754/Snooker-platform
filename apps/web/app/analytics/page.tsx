@@ -50,7 +50,7 @@ export default function AnalyticsPage() {
         <Link href="/" className="mb-6 inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white">
           <ArrowLeft size={16} /> Back to Home
         </Link>
-        <div className="mb-8 flex items-end justify-between">
+        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
             <h1 className="text-3xl font-bold">Analytics Suite</h1>
             <p className="mt-2 text-zinc-400">Live player performance snapshots derived from finished matches and event logs.</p>
@@ -67,7 +67,7 @@ export default function AnalyticsPage() {
             </div>
           )}
           {players.map((player, index) => (
-            <div key={player.player} className="grid gap-4 rounded-2xl border border-zinc-800 bg-zinc-900 p-6 md:grid-cols-[2fr_repeat(5,1fr)]">
+            <div key={player.player} className="grid gap-4 rounded-2xl border border-zinc-800 bg-zinc-900 p-6 md:grid-cols-2 xl:grid-cols-[2fr_repeat(5,1fr)]">
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">Rank #{index + 1}</p>
                 <h2 className="mt-2 text-xl font-bold">{player.player}</h2>

@@ -3,15 +3,27 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
-import { Play, Activity, CalendarDays, ChevronLeft, ChevronRight, Search, Bell, Library, LayoutGrid, Trophy, BarChart3 } from "lucide-react";
+import { Play, Activity, CalendarDays, ChevronLeft, ChevronRight, Search, Bell, Library, LayoutGrid, Trophy, BarChart3, Menu, X } from "lucide-react";
 import { readOfflineCache, writeOfflineCache } from "../lib/offline-cache";
 
 const MATCHES_CACHE_KEY = "snooker.offline.matches";
 const SETTINGS_CACHE_KEY = "snooker.offline.settings";
+const primaryNavItems = [
+  { href: "#live", label: "Live Matches" },
+  { href: "#schedule", label: "Upcoming" },
+  { href: "#history", label: "History" },
+  { href: "/players", label: "Players" },
+  { href: "/analytics", label: "Analytics" },
+];
+const secondaryNavItems = [
+  { href: "/multi-stream", label: "Multi-Stream", icon: LayoutGrid },
+  { href: "/vod", label: "VOD", icon: Library },
+];
 
 export default function HomePage() {
   const { data: session, status } = useSession();
   const [hasMounted, setHasMounted] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
   const [liveMatches, setLiveMatches] = useState<any[]>([]);
   const [scheduledMatches, setScheduledMatches] = useState<any[]>([]);
@@ -32,6 +44,10 @@ export default function HomePage() {
   useEffect(() => {
     setHasMounted(true);
   }, []);
+
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [session, status]);
 
   // Auto advance slides every 5 seconds
   useEffect(() => {
@@ -302,89 +318,186 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-zinc-950 font-sans">
-      <header className="h-20 bg-zinc-950/90 backdrop-blur-xl border-b border-zinc-800 flex items-center justify-between px-4 md:px-8 sticky top-0 z-50">
-        <div className="flex items-center gap-8">
-          <Link href="/" className="flex items-center gap-1.5 md:gap-2 group">
-            <div className="w-2.5 h-2.5 md:w-3 md:h-3 rounded-full bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.8)] group-hover:animate-pulse transition-all"></div>
-            <span className="font-bold text-xl md:text-2xl text-white tracking-tight">Snooker<span className="text-emerald-500">Stream</span></span>
-          </Link>
-          <nav className="hidden md:flex items-center gap-6">
-            <Link href="#live" className="text-zinc-300 hover:text-white font-medium transition-colors">Live Matches</Link>
-            <Link href="#schedule" className="text-zinc-300 hover:text-white font-medium transition-colors">Upcoming</Link>
-            <Link href="#history" className="text-zinc-300 hover:text-white font-medium transition-colors">History</Link>
-            <Link href="/players" className="text-zinc-300 hover:text-white font-medium transition-colors">Players</Link>
-            <Link href="/analytics" className="text-zinc-300 hover:text-white font-medium transition-colors">Analytics</Link>
-          </nav>
-        </div>
-        
-        <div className="flex items-center gap-4">
-          <div className="hidden lg:flex items-center gap-2">
-            <Link href="/multi-stream" className="rounded-full border border-zinc-800 px-4 py-2 text-sm text-zinc-300 hover:border-zinc-700 hover:text-white">
-              <LayoutGrid size={14} className="mr-2 inline-block" />
-              Multi-Stream
+      <header className="sticky top-0 z-50 border-b border-zinc-800 bg-zinc-950/90 backdrop-blur-xl">
+        <div className="flex min-h-20 items-center justify-between gap-3 px-4 md:px-8">
+          <div className="flex items-center gap-4 md:gap-8">
+            <Link href="/" className="flex items-center gap-1.5 md:gap-2 group">
+              <div className="w-2.5 h-2.5 md:w-3 md:h-3 rounded-full bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.8)] group-hover:animate-pulse transition-all"></div>
+              <span className="font-bold text-xl md:text-2xl text-white tracking-tight">Snooker<span className="text-emerald-500">Stream</span></span>
             </Link>
-            <Link href="/vod" className="rounded-full border border-zinc-800 px-4 py-2 text-sm text-zinc-300 hover:border-zinc-700 hover:text-white">
-              <Library size={14} className="mr-2 inline-block" />
-              VOD
-            </Link>
+            <nav className="hidden md:flex items-center gap-6">
+              {primaryNavItems.map((item) => (
+                <Link key={item.href} href={item.href} className="text-zinc-300 hover:text-white font-medium transition-colors">
+                  {item.label}
+                </Link>
+              ))}
+            </nav>
           </div>
-          {!hasMounted || status === "loading" ? (
-             <div className="w-8 h-8 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin"></div>
-          ) : session ? (
-            <div className="flex items-center gap-4">
-              {(session.user as any)?.role === "admin" && (
-                <Link href="/admin" className="text-sm font-semibold bg-zinc-800 hover:bg-zinc-700 text-white px-4 py-2 rounded-lg transition-colors border border-zinc-700">
-                  Admin Dashboard
-                </Link>
-              )}
-              {(session.user as any)?.role === "umpire" && (
-                <Link href="/umpire" className="text-sm font-semibold bg-blue-900/40 hover:bg-blue-900/60 text-blue-400 px-4 py-2 rounded-lg transition-colors border border-blue-800/50">
-                  Umpire Panel
-                </Link>
-              )}
-              
-              <div className="w-px h-6 bg-zinc-800 hidden md:block"></div>
-              
-              <Link 
-                href="/profile" 
-                className="flex items-center gap-3 group transition-all"
-                title="Profile Settings"
-              >
-                <div className="w-9 h-9 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center group-hover:border-emerald-500/50 group-hover:bg-zinc-800 transition-all overflow-hidden">
-                  {session.user?.image ? (
-                    <img src={session.user.image} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="text-zinc-500 group-hover:text-emerald-500 transition-colors capitalize font-bold">
-                      {session.user?.name?.[0] || 'U'}
-                    </div>
-                  )}
-                </div>
-                <div className="hidden lg:block">
-                  <p className="text-xs font-bold text-white leading-none mb-0.5">{session.user?.name}</p>
-                  <p className="text-[10px] text-zinc-500 font-medium">{session.user?.email}</p>
-                </div>
-              </Link>
 
-              <button 
-                onClick={() => signOut()} 
-                className="p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-500 hover:text-white hover:border-zinc-700 transition-all cursor-pointer"
-                title="Sign Out"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-              </button>
+          <div className="flex items-center gap-2 sm:gap-4">
+            <div className="hidden lg:flex items-center gap-2">
+              {secondaryNavItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <Link key={item.href} href={item.href} className="rounded-full border border-zinc-800 px-4 py-2 text-sm text-zinc-300 hover:border-zinc-700 hover:text-white">
+                    <Icon size={14} className="mr-2 inline-block" />
+                    {item.label}
+                  </Link>
+                );
+              })}
             </div>
-          ) : (
-            <>
-              <Link href="/login" className="text-sm font-semibold text-zinc-300 hover:text-white transition-colors">Sign In</Link>
-              <Link href="/register" className={`text-sm font-semibold px-4 md:px-5 py-2 md:py-2.5 rounded-full transition-colors shadow-lg shadow-emerald-900/20 ${registrationAllowed && !maintenanceMode ? "bg-emerald-600 hover:bg-emerald-500 text-white" : "bg-zinc-800 text-zinc-400 pointer-events-none"}`}>
-                <span className="hidden sm:inline">Subscribe Now</span>
-                <span className="sm:hidden">Subscribe</span>
-              </Link>
-            </>
-          )}
+            {!hasMounted || status === "loading" ? (
+              <div className="w-8 h-8 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin"></div>
+            ) : session ? (
+              <div className="hidden md:flex items-center gap-4">
+                {(session.user as any)?.role === "admin" && (
+                  <Link href="/admin" className="text-sm font-semibold bg-zinc-800 hover:bg-zinc-700 text-white px-4 py-2 rounded-lg transition-colors border border-zinc-700">
+                    Admin Dashboard
+                  </Link>
+                )}
+                {(session.user as any)?.role === "umpire" && (
+                  <Link href="/umpire" className="text-sm font-semibold bg-blue-900/40 hover:bg-blue-900/60 text-blue-400 px-4 py-2 rounded-lg transition-colors border border-blue-800/50">
+                    Umpire Panel
+                  </Link>
+                )}
+
+                <div className="w-px h-6 bg-zinc-800 hidden md:block"></div>
+
+                <Link
+                  href="/profile"
+                  className="flex items-center gap-3 group transition-all"
+                  title="Profile Settings"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center group-hover:border-emerald-500/50 group-hover:bg-zinc-800 transition-all overflow-hidden">
+                    {session.user?.image ? (
+                      <img src={session.user.image} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="text-zinc-500 group-hover:text-emerald-500 transition-colors capitalize font-bold">
+                        {session.user?.name?.[0] || "U"}
+                      </div>
+                    )}
+                  </div>
+                  <div className="hidden lg:block">
+                    <p className="text-xs font-bold text-white leading-none mb-0.5">{session.user?.name}</p>
+                    <p className="text-[10px] text-zinc-500 font-medium">{session.user?.email}</p>
+                  </div>
+                </Link>
+
+                <button
+                  onClick={() => signOut()}
+                  className="p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-500 hover:text-white hover:border-zinc-700 transition-all cursor-pointer"
+                  title="Sign Out"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                </button>
+              </div>
+            ) : (
+              <div className="hidden sm:flex items-center gap-3">
+                <Link href="/login" className="text-sm font-semibold text-zinc-300 hover:text-white transition-colors">Sign In</Link>
+                <Link href="/register" className={`text-sm font-semibold px-4 md:px-5 py-2 md:py-2.5 rounded-full transition-colors shadow-lg shadow-emerald-900/20 ${registrationAllowed && !maintenanceMode ? "bg-emerald-600 hover:bg-emerald-500 text-white" : "bg-zinc-800 text-zinc-400 pointer-events-none"}`}>
+                  <span className="hidden sm:inline">Subscribe Now</span>
+                  <span className="sm:hidden">Subscribe</span>
+                </Link>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen((prev) => !prev)}
+              className="inline-flex items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900 p-2 text-zinc-200 transition-colors hover:border-zinc-700 hover:text-white md:hidden"
+              aria-label={mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
+              aria-expanded={mobileMenuOpen}
+            >
+              {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
+          </div>
         </div>
+        {mobileMenuOpen && (
+          <div className="border-t border-zinc-800 bg-zinc-950/95 px-4 py-4 md:hidden">
+            <nav className="flex flex-col gap-2">
+              {primaryNavItems.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm font-medium text-zinc-200 transition-colors hover:border-zinc-700 hover:text-white"
+                >
+                  {item.label}
+                </Link>
+              ))}
+              {secondaryNavItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm font-medium text-zinc-200 transition-colors hover:border-zinc-700 hover:text-white"
+                  >
+                    <Icon size={14} className="mr-2 inline-block" />
+                    {item.label}
+                  </Link>
+                );
+              })}
+              {!hasMounted || status === "loading" ? (
+                <div className="mt-2 rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-zinc-400">Loading account...</div>
+              ) : session ? (
+                <div className="mt-2 rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
+                  <div className="mb-4 flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950">
+                      {session.user?.image ? (
+                        <img src={session.user.image} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="text-sm font-bold capitalize text-emerald-400">
+                          {session.user?.name?.[0] || "U"}
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-white">{session.user?.name}</p>
+                      <p className="truncate text-xs text-zinc-500">{session.user?.email}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Link href="/profile" onClick={() => setMobileMenuOpen(false)} className="rounded-xl border border-zinc-800 px-4 py-3 text-sm font-medium text-zinc-200 hover:border-zinc-700 hover:text-white">
+                      Profile Settings
+                    </Link>
+                    {(session.user as any)?.role === "admin" && (
+                      <Link href="/admin" onClick={() => setMobileMenuOpen(false)} className="rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-3 text-sm font-semibold text-white hover:bg-zinc-700">
+                        Admin Dashboard
+                      </Link>
+                    )}
+                    {(session.user as any)?.role === "umpire" && (
+                      <Link href="/umpire" onClick={() => setMobileMenuOpen(false)} className="rounded-xl border border-blue-800/50 bg-blue-900/40 px-4 py-3 text-sm font-semibold text-blue-300 hover:bg-blue-900/60">
+                        Umpire Panel
+                      </Link>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMobileMenuOpen(false);
+                        signOut();
+                      }}
+                      className="rounded-xl border border-zinc-800 px-4 py-3 text-left text-sm font-medium text-zinc-300 hover:border-zinc-700 hover:text-white"
+                    >
+                      Sign Out
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-2 flex flex-col gap-2">
+                  <Link href="/login" onClick={() => setMobileMenuOpen(false)} className="rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm font-semibold text-zinc-200 hover:border-zinc-700 hover:text-white">
+                    Sign In
+                  </Link>
+                  <Link href="/register" onClick={() => setMobileMenuOpen(false)} className={`rounded-2xl px-4 py-3 text-center text-sm font-semibold transition-colors ${registrationAllowed && !maintenanceMode ? "bg-emerald-600 text-white hover:bg-emerald-500" : "bg-zinc-800 text-zinc-400 pointer-events-none"}`}>
+                    Subscribe
+                  </Link>
+                </div>
+              )}
+            </nav>
+          </div>
+        )}
       </header>
 
       {(maintenanceMode || announcement) && (
@@ -398,7 +511,7 @@ export default function HomePage() {
       )}
 
       {/* Hero / Top Live Matches Carousel (Hotstar Style) */}
-      <section className="relative w-full h-[60vh] md:h-[75vh] bg-black overflow-hidden border-b border-zinc-800 flex items-center justify-center">
+      <section className="relative flex h-[70svh] min-h-[520px] w-full items-center justify-center overflow-hidden border-b border-zinc-800 bg-black md:h-[75vh]">
         {isLoading ? (
           <Activity className="animate-spin text-emerald-500 relative z-10" size={48} />
         ) : liveMatches.length === 0 ? (
@@ -429,11 +542,11 @@ export default function HomePage() {
               </div>
 
             {/* Content Container */}
-            <div className="max-w-[1600px] w-full mx-auto px-4 md:px-8 relative z-10 flex flex-col justify-end h-full pb-16 md:pb-24">
+            <div className="max-w-[1600px] w-full mx-auto px-4 md:px-8 relative z-10 flex flex-col justify-end h-full pb-24 md:pb-24">
                {liveMatches.map((match, idx) => (
                  <div 
                    key={match._id} 
-                   className={`transition-all duration-700 ease-in-out absolute inset-0 max-w-[1600px] mx-auto px-4 md:px-8 flex flex-col justify-end pb-16 md:pb-24 ${idx === currentSlide ? 'opacity-100 translate-x-0 pointer-events-auto z-10' : 'opacity-0 translate-x-12 pointer-events-none z-0'}`}
+                   className={`transition-all duration-700 ease-in-out absolute inset-0 max-w-[1600px] mx-auto px-4 md:px-8 flex flex-col justify-end pb-24 md:pb-24 ${idx === currentSlide ? 'opacity-100 translate-x-0 pointer-events-auto z-10' : 'opacity-0 translate-x-12 pointer-events-none z-0'}`}
                  >
                    <div className="max-w-4xl relative">
                      <div className={`inline-flex items-center gap-2 border px-3 py-1.5 rounded-full mb-6 max-w-fit ${match.status === 'live' ? 'bg-red-500/10 border-red-500/20' : (match.status === 'finished' ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-orange-500/10 border-orange-500/20')}`}>
@@ -442,7 +555,7 @@ export default function HomePage() {
                           {match.status === 'live' ? 'Live Now' : (match.status === 'finished' ? 'Match Finished' : 'Paused')}
                         </span>
                       </div>
-                      <h1 className="text-3xl md:text-6xl lg:text-7xl xl:text-8xl font-black text-white leading-tight md:leading-none tracking-tighter mb-4 drop-shadow-[0_4px_12px_rgba(0,0,0,1)]">
+                      <h1 className="text-3xl sm:text-4xl md:text-6xl lg:text-7xl xl:text-8xl font-black text-white leading-tight md:leading-none tracking-tighter mb-4 drop-shadow-[0_4px_12px_rgba(0,0,0,1)]">
                         {match.playerA} <span className="text-zinc-400 font-medium px-1 md:px-2 text-xl md:text-4xl">vs</span> {match.playerB}
                       </h1>
                       {match.status === "finished" && match.winner && (
@@ -451,7 +564,7 @@ export default function HomePage() {
                           <span className="uppercase tracking-widest">{match.winner} won</span>
                         </div>
                       )}
-                                           <div className="flex items-center gap-4 md:gap-6 mb-6 md:mb-8 text-lg md:text-2xl font-bold">
+                      <div className="flex flex-wrap items-center gap-4 md:gap-6 mb-6 md:mb-8 text-lg md:text-2xl font-bold">
                         <div className="flex items-baseline gap-2 drop-shadow-[0_4px_8px_rgba(0,0,0,1)]">
                           <span className={`truncate max-w-[100px] md:max-w-[150px] ${match.winner === match.playerA ? 'text-emerald-400' : 'text-white'}`}>{match.playerA}</span>
                           <span className={`text-3xl md:text-5xl ${match.winner === match.playerA ? 'text-emerald-400' : 'text-zinc-200'}`}>
@@ -491,7 +604,7 @@ export default function HomePage() {
 
             {/* Navigation Controls */}
             {liveMatches.length > 1 && (
-              <div className="absolute bottom-8 right-8 z-30 flex items-center gap-4 bg-zinc-950/80 backdrop-blur-md px-6 py-3 rounded-full border border-zinc-800 shadow-2xl">
+              <div className="absolute bottom-6 left-1/2 z-30 flex -translate-x-1/2 items-center gap-3 rounded-full border border-zinc-800 bg-zinc-950/80 px-4 py-3 shadow-2xl backdrop-blur-md md:bottom-8 md:left-auto md:right-8 md:translate-x-0 md:gap-4 md:px-6">
                 <button 
                   onClick={() => setCurrentSlide(prev => prev === 0 ? liveMatches.length - 1 : prev - 1)}
                   className="text-zinc-400 hover:text-white transition-colors cursor-pointer"
@@ -526,7 +639,7 @@ export default function HomePage() {
             You are viewing the latest cached home feed. Scores and schedules will refresh automatically when the connection returns.
           </section>
         )}
-        <section className="grid gap-4 md:grid-cols-4">
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Link href="/players" className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 text-zinc-300 hover:border-zinc-700">
             <Trophy className="mb-3 text-emerald-400" />
             <h3 className="font-bold text-white">Advanced Player Search</h3>
@@ -696,7 +809,7 @@ export default function HomePage() {
 
        <div className="p-5 pt-0 flex flex-col flex-1">
           <div className="space-y-3 mb-6 flex-1 flex flex-col justify-center">
-            <div className="flex justify-between items-center text-lg">
+            <div className="flex justify-between items-center gap-3 text-lg">
                <span className={`font-bold truncate max-w-[150px] ${
                  (match.winner === match.playerA || (match.status === 'finished' && match.framesWonA > match.framesWonB)) ? 'text-emerald-400' : 'text-white'
                }`}>
@@ -706,7 +819,7 @@ export default function HomePage() {
                  (match.winner === match.playerA || (match.status === 'finished' && match.framesWonA > match.framesWonB)) ? 'text-emerald-400' : 'text-zinc-500'
                }`}>{match.framesWonA || 0}</span>}
             </div>
-            <div className="flex justify-between items-center text-lg">
+            <div className="flex justify-between items-center gap-3 text-lg">
                <span className={`font-bold truncate max-w-[150px] ${
                  (match.winner === match.playerB || (match.status === 'finished' && match.framesWonB > match.framesWonA)) ? 'text-emerald-400' : 'text-zinc-400'
                }`}>

@@ -305,32 +305,34 @@ export default function WatchPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950 flex flex-col font-sans">
-      <header className="h-16 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800 flex items-center justify-between px-6 sticky top-0 z-50">
-        <div className="flex items-center gap-6">
-          <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-            <div className="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.8)] animate-pulse"></div>
-            <span className="font-bold text-xl text-white tracking-tight">Snooker<span className="text-emerald-500">Stream</span></span>
-          </Link>
-        </div>
-        <div className="flex items-center gap-4">
-          {!hasMounted || status === "loading" ? (
-            <div className="w-8 h-8 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin"></div>
-          ) : session ? (
-            <div className="flex items-center gap-4">
-              {(session.user as any)?.role === "admin" && <Link href="/admin" className="text-sm font-semibold bg-zinc-800 hover:bg-zinc-700 text-white px-4 py-2 rounded-lg transition-colors border border-zinc-700">Admin Dashboard</Link>}
-              {(session.user as any)?.role === "umpire" && <Link href="/umpire" className="text-sm font-semibold bg-blue-900/40 hover:bg-blue-900/60 text-blue-400 px-4 py-2 rounded-lg transition-colors border border-blue-800/50">Umpire Panel</Link>}
-              <div className="w-px h-6 bg-zinc-800 hidden md:block"></div>
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-zinc-300 hidden md:block">{session.user?.name}</span>
-                <button onClick={() => signOut()} className="text-sm font-medium text-zinc-500 hover:text-white transition-colors cursor-pointer">Sign Out</button>
+      <header className="bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800 sticky top-0 z-50">
+        <div className="flex min-h-16 items-center justify-between gap-3 px-4 md:px-6">
+          <div className="flex items-center gap-3 md:gap-6 min-w-0">
+            <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+              <div className="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.8)] animate-pulse"></div>
+              <span className="font-bold text-lg md:text-xl text-white tracking-tight">Snooker<span className="text-emerald-500">Stream</span></span>
+            </Link>
+          </div>
+          <div className="flex items-center gap-2 md:gap-4">
+            {!hasMounted || status === "loading" ? (
+              <div className="w-8 h-8 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin"></div>
+            ) : session ? (
+              <div className="flex items-center gap-2 md:gap-4">
+                {(session.user as any)?.role === "admin" && <Link href="/admin" className="hidden md:inline-flex text-sm font-semibold bg-zinc-800 hover:bg-zinc-700 text-white px-4 py-2 rounded-lg transition-colors border border-zinc-700">Admin Dashboard</Link>}
+                {(session.user as any)?.role === "umpire" && <Link href="/umpire" className="hidden md:inline-flex text-sm font-semibold bg-blue-900/40 hover:bg-blue-900/60 text-blue-400 px-4 py-2 rounded-lg transition-colors border border-blue-800/50">Umpire Panel</Link>}
+                <div className="w-px h-6 bg-zinc-800 hidden md:block"></div>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-zinc-300 hidden md:block">{session.user?.name}</span>
+                  <button onClick={() => signOut()} className="text-sm font-medium text-zinc-500 hover:text-white transition-colors cursor-pointer">Sign Out</button>
+                </div>
               </div>
-            </div>
-          ) : (
-            <>
-              <Link href="/login" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">Sign In</Link>
-              <Link href="/register" className="text-sm font-medium bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-full transition-colors cursor-pointer">Subscribe</Link>
-            </>
-          )}
+            ) : (
+              <div className="flex items-center gap-2 md:gap-4">
+                <Link href="/login" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">Sign In</Link>
+                <Link href="/register" className="hidden sm:inline-flex text-sm font-medium bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-full transition-colors cursor-pointer">Subscribe</Link>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -346,7 +348,7 @@ export default function WatchPage() {
               You are viewing a cached match snapshot. Live scoring, viewer count, and chat updates will resume when connectivity returns.
             </div>
           )}
-          <div className="flex items-center gap-2 text-zinc-400 mb-2">
+          <div className="mb-2 flex flex-wrap items-center gap-2 text-zinc-400">
             <Link href="/" className="hover:text-white transition-colors flex items-center text-sm"><ChevronLeft size={16} /> Back to Home</Link>
             <span>•</span>
             <span className="text-sm">{formatLabel}</span>
@@ -370,7 +372,7 @@ export default function WatchPage() {
           </div>
         </div>
 
-        <div className="lg:col-span-1 flex flex-col h-[600px] lg:h-auto bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-xl">
+        <div className="lg:col-span-1 flex flex-col min-h-[420px] h-[600px] lg:h-auto bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-xl">
           <div className="flex border-b border-zinc-800">
             <button onClick={() => setActiveTab("events")} className={`flex-1 flex items-center justify-center gap-2 py-4 text-sm font-medium ${activeTab === "events" ? "text-emerald-400 border-b-2 border-emerald-500 bg-emerald-500/5" : "text-zinc-500"}`}><Activity size={16} /> Match Events</button>
             <button onClick={() => setActiveTab("chat")} className={`flex-1 flex items-center justify-center gap-2 py-4 text-sm font-medium ${activeTab === "chat" ? "text-emerald-400 border-b-2 border-emerald-500 bg-emerald-500/5" : "text-zinc-500"}`}><MessageSquare size={16} /> Live Chat</button>

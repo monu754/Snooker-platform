@@ -15,17 +15,18 @@ export default function UmpireLayout({ children }: { children: React.ReactNode }
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex flex-col font-sans">
-      <header className="h-16 bg-[#121214] border-b border-zinc-800/80 flex items-center justify-between px-6">
+      <header className="bg-[#121214] border-b border-zinc-800/80">
+        <div className="flex min-h-16 flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-0">
         <Link href="/umpire" className="flex items-center gap-2 text-blue-500 hover:opacity-80 transition-opacity">
           <ShieldCheck size={24} />
           <span className="font-bold text-lg text-white tracking-wide">Umpire<span className="text-zinc-500 font-medium">Panel</span></span>
         </Link>
         
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4">
           <span className="text-sm text-zinc-400">
             Logged in as: <strong className="text-white">{hasMounted ? (session?.user?.name || "Official") : "Official"}</strong>
           </span>
-          <div className="w-px h-6 bg-zinc-800"></div>
+          <div className="hidden h-6 w-px bg-zinc-800 sm:block"></div>
           
           {/* Route to main App Home */}
           <Link 
@@ -34,6 +35,7 @@ export default function UmpireLayout({ children }: { children: React.ReactNode }
           >
             <Home size={16} /> Home Page
           </Link>
+        </div>
         </div>
       </header>
       
